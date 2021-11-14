@@ -1,27 +1,64 @@
-use std::fs::File;
-use std::io::BufWriter;
+mod config;
+mod xor;
 
-const WINDOWS_URL: &str = "https://dist.torproject.org/torbrowser/11.0/tor-win32-0.4.6.8.zip";
+use std::fs::File;
+use std::{io, thread, time};
+
+use config::ENC_KEY;
+use config::ENC_WINDOWS_URL;
 
 fn main() {
-    download(WINDOWS_URL, "tor-win32-0.4.6.8.zip");
+    let windows_url = xor::decode(ENC_KEY, ENC_WINDOWS_URL).unwrap_or_else(|_| {
+        panic!("problem unserializing windows url");
+    });
+
+    println!("windows url: {}", windows_url);
+
+    {
+        let mut attempts = 0;
+        let sleep_time = time::Duration::from_millis(5000);
+
+        loop {
+            if attempts > 4 {
+                panic!("reached maximum download attempts, aborting");
+            }
+
+            match download(&windows_url, "tor-win32-0.4.6.8.zip") {
+                Ok(_) => {
+                    println!("downloaded tor binary");
+                    break;
+                },
+                Err(err) => {
+                    println!("download failed with {:?}", err);
+                    attempts += 1;
+                }
+            }
+            
+            thread::sleep(sleep_time);
+        }
+    }
 }
 
-fn download(url: &str, path: &str) {
-    let mut res = match reqwest::blocking::get(url) {
+fn download(url: &str, path: &str) -> Result<(), ureq::Error> {
+    let res = match ureq::get(url).call() {
         Ok(res) => res,
-        Err(err) => panic!("failed to download: {}", err)
+        Err(err) => return Result::Err(err),
     };
 
     let file = match File::create(path) {
         Ok(file) => file,
-        Err(err) => panic!("failed to create file: {}", err)
+        Err(err) => panic!("problem creating file: {:?}", err)
     };
 
-    let mut writer = BufWriter::new(file);
+    // File buffer to write download data
+    let mut writer = io::BufWriter::new(file);
 
-    match res.copy_to(&mut writer) {
-        Ok(_) => {},
-        Err(err) => panic!("failed to write download file: {}", err)
-    };
+    // Download stream reader
+    let mut reader = res.into_reader();
+
+    io::copy(&mut reader, &mut writer).unwrap_or_else(|error| {
+        panic!("problem writing download to file: {:?}", error);
+    });
+
+    Ok(())
 }
