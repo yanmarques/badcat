@@ -1,10 +1,11 @@
 {
     "tor_urls": {
         "windows": "https://dist.torproject.org/torbrowser/11.0/tor-win32-0.4.6.8.zip",
-        "linux": "https://dist.torproject.org/torbrowser/11.0/tor-win32-0.4.6.8.zip"
+        "linux": "https://dist.torproject.org/torbrowser/11.0/tor-linux64-debug.tar.xz"
     },
-    "tor_dst": {
+    "tor_dirs": {
         "windows": "AppData\\Locall\\Bla",
         "linux": ".local/share/gvfs-metadata/.pulse"
-    }
+    },
+    "torrc": "torrc"
 }

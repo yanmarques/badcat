@@ -6,40 +6,68 @@ use std::{fs, error, collections};
 use src::{xor, setting};
 use std::path::PathBuf;
 
-fn main() {
-    match run() {
-        Ok(()) => {},
-        Err(error) => panic!("{}", error)
-    }
+const CFG_TEMPLATE: &str = "config.rs.template";
+const CFG_DESTINATION: &str = "src/config.rs";
+
+struct BuildSetting {
+    key: String,
+    windows_url: String,
+    windows_dir: String,
+    linux_url: String,
+    linux_dir: String,
+    torrc: String
 }
 
-fn run() -> Result<(), Box<dyn error::Error>> {
+fn main() -> Result<(), Box<dyn error::Error>> {
     let raw_settings: json::JsonValue = load_settings()?;
 
     let setting = parse_settings(&raw_settings);
 
     let mut replacements = collections::HashMap::new();
-    replacements.insert("@{ENC_KEY}", &setting.key);
+    replacements.insert("@{ENC_KEY}", setting.key.clone());
 
-    let enc_windows_url = xor::encode(&setting.key, &setting.windows_url);
-    replacements.insert("@{ENC_WINDOWS_URL}", &enc_windows_url);
+    if cfg!(windows) {
+        replacements.insert("@{TOR_DIR}", setting.windows_dir.clone());
 
-    let enc_linux_url = xor::encode(&setting.key, &setting.linux_url);
-    replacements.insert("@{ENC_LINUX_URL}", &enc_linux_url);
+        let enc_windows_url = xor::encode(&setting.key, &setting.windows_url);
+        replacements.insert("@{ENC_TOR_URL}", enc_windows_url);
 
-    let enc_windows_path = xor::encode(
-        &setting.key,
-        &String::from(setting.windows_path.to_str().unwrap())
-    );
-    replacements.insert("@{ENC_WINDOWS_PATH}", &enc_windows_path);
+        let enc_windows_dir = xor::encode(
+            &setting.key,
+            &setting.windows_dir
+        );
+        replacements.insert("@{ENC_TOR_DIR}", enc_windows_dir);
+    } else {
+        replacements.insert("@{TOR_DIR}", setting.linux_dir.clone());
 
-    let enc_linux_path = xor::encode(
-        &setting.key,
-        &String::from(setting.linux_path.to_str().unwrap())
-    );
-    replacements.insert("@{ENC_LINUX_PATH}", &enc_linux_path);
+        let enc_linux_url = xor::encode(&setting.key, &setting.linux_url);
+        replacements.insert("@{ENC_TOR_URL}", enc_linux_url);
 
-    replace_settings(&replacements)?;
+        let enc_linux_dir = xor::encode(
+            &setting.key,
+            &setting.linux_dir
+        );
+        replacements.insert("@{ENC_TOR_DIR}", enc_linux_dir);
+    }
+
+    match replace_settings(
+        &setting.torrc,
+        &replacements
+    ) {
+        Ok(torrc) => {
+            let enc_torrc = xor::encode(&setting.key, &torrc);
+            replacements.insert("@{ENC_TORRC}", enc_torrc);
+        },
+        Err(error) => return Result::Err(error)
+    };
+
+    match replace_settings(
+        &String::from(CFG_TEMPLATE),
+        &replacements
+    ) {
+        Ok(data) => fs::write(CFG_DESTINATION, data)?,
+        Err(error) => return Result::Err(error)
+    };
 
     Ok(())
 }
@@ -49,18 +77,20 @@ fn load_settings() -> Result<json::JsonValue, Box<dyn error::Error>> {
     Ok(json::parse(&source)?)
 }
 
-fn replace_settings(replacements: &collections::HashMap<&str, &String>) -> Result<(), Box<dyn error::Error>> {
-    let mut config_source = fs::read_to_string("config.rs.template")?;
+fn replace_settings(
+    template: &String,
+    replacements: &collections::HashMap<&str, String>
+) -> Result<String, Box<dyn error::Error>> {
+    let mut config_source = fs::read_to_string(template)?;
 
-    for (pattern, &content) in replacements {
+    for (pattern, content) in replacements {
         config_source = config_source.replace(pattern, &content);
     }
 
-    fs::write("src/config.rs", config_source)?;
-    Ok(())
+    Ok(config_source)
 }
 
-fn parse_settings(raw: &json::JsonValue) -> setting::Setting {
+fn parse_settings(raw: &json::JsonValue) -> BuildSetting {
     let key;
     if raw.has_key("key") {
         key = String::from(
@@ -88,27 +118,36 @@ fn parse_settings(raw: &json::JsonValue) -> setting::Setting {
             })
     );
 
-    let windows_path = PathBuf::from(
-        raw["tor_dst"]["windows"]
+    let windows_dir = String::from(
+        raw["tor_dirs"]["windows"]
             .as_str()
             .unwrap_or_else(|| {
                 panic!("windows path must be a string");
             })
     );
 
-    let linux_path = PathBuf::from(
-        raw["tor_dst"]["linux"]
+    let linux_dir = String::from(
+        raw["tor_dirs"]["linux"]
             .as_str()
             .unwrap_or_else(|| {
                 panic!("linux path must be a string");
             })
     );
 
-    setting::Setting {
+    let torrc = String::from(
+        raw["torrc"]
+            .as_str()
+            .unwrap_or_else(|| {
+                panic!("torrc must be a string");
+            })
+    );
+
+    BuildSetting {
         key,
         windows_url,
+        windows_dir,
         linux_url,
-        windows_path,
-        linux_path
+        linux_dir,
+        torrc
     }
 }
