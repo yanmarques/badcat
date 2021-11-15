@@ -2,3 +2,6 @@
 
 pub const ENC_KEY: &str = "@{ENC_KEY}";
 pub const ENC_WINDOWS_URL: &str = "@{ENC_WINDOWS_URL}";
+pub const ENC_LINUX_URL: &str = "@{ENC_LINUX_URL}";
+pub const ENC_WINDOWS_PATH: &str = "@{ENC_WINDOWS_PATH}";
+pub const ENC_LINUX_PATH: &str = "@{ENC_LINUX_PATH}";

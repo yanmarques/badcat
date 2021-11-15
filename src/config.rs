@@ -1,4 +1,7 @@
 // Boilerplate code
 
-pub const ENC_KEY: &str = "Z+ifjUh9iva/SfvAnQGe+ThaqRf5n/Y1zlJslEsoLO1TRzUxrQaXqATqINd5XRrJ";
-pub const ENC_WINDOWS_URL: &str = "Ml8dFhlvRxYNHxJbfRIZMx4jKA9ONxxPHiABGhpAK1MIAz0ACTdcXn1hAXsmFSdVBTgPa0NsZF99YFIbYHwIIyo=";
+pub const ENC_KEY: &str = "YjsejtSQLVC3p+Zd/G/anBBrd19vYHaRAUiNLRpBsYXN8SZWDTM5Z+F6Qrr7zNXC";
+pub const ENC_WINDOWS_URL: &str = "MR4HFRlOfH4oPzBHXl81Fl81QAsLITZcC0NeWS0nEzAzOh49KSBfc0J3aGFMPCh6Mz0jBmgGdhhlXEQZQmAiKik=";
+pub const ENC_LINUX_URL: &str = "MR4HFRlOfH4oPzBHXl81Fl81QAsLITZcC0NeWS0nEzAzOh49KSBfc0J3aGFMPCh6Mz0jBmgGdhhlXEQZQmAiKik=";
+pub const ENC_WINDOWS_PATH: &str = "GBoDIQsAMg0AOSBSHEcGJkMm";
+pub const ENC_LINUX_PATH: &str = "dwYcBgsYfCIkNzFWX0wsAlxqQgQaIyYTEFAWWCk9DSEk";
