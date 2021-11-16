@@ -103,6 +103,21 @@ fn start_tor_binary(
         executable.set_extension("exe");
     }
 
+    // Fix directory permission - linux build requires this
+    if cfg!(unix) || cfg!(macos) {
+        let status = Command::new("chmod")
+            .args(["700", setting.tor_dir.to_str().unwrap()])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()?;
+
+        if !status.success() {
+            return Result::Err(
+                String::from("problem setting app directory permision").into()
+            );
+        }
+    }
+
     let log = setting.tor_dir.join("log.txt");
 
     let stdout: File = File::create(&log)?;
