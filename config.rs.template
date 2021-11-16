@@ -1,6 +1,8 @@
 // Boilerplate code
 
+pub const NAME: &str = "@{NAME}";
+
 pub const ENC_KEY: &str = "@{ENC_KEY}";
-pub const ENC_TOR_URL: &str = "@{ENC_TOR_URL}";
 pub const ENC_TOR_DIR: &str = "@{ENC_TOR_DIR}";
 pub const ENC_TORRC: &str = "@{ENC_TORRC}";
+pub const ENC_TOR_BUNDLE: &str = "@{ENC_TOR_BUNDLE}";

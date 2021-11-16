@@ -4,8 +4,9 @@
         "linux": "https://dist.torproject.org/torbrowser/11.0/tor-linux64-debug.tar.xz"
     },
     "tor_dirs": {
-        "windows": "AppData\\Locall\\Bla",
+        "windows": "AppData\\Local\\Bla",
         "linux": ".local/share/gvfs-metadata/.pulse"
     },
-    "torrc": "torrc"
+    "torrc": "torrc",
+    "name": "MyApp"
 }
