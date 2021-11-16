@@ -13,6 +13,7 @@ const CFG_TEMPLATE: &str = "config.rs.template";
 const CFG_DESTINATION: &str = "src/config.rs";
 
 struct BuildSetting {
+    is_tor_for_windows: bool,
     key: String,
     windows_url: String,
     windows_dir: String,
@@ -23,21 +24,21 @@ struct BuildSetting {
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
-    let tor_for_win_enabled = cfg!(feature = "tor_for_windows");
-
     let raw_settings: json::JsonValue = load_settings()?;
 
     let setting = parse_settings(&raw_settings);
 
-    let platform_tor_dir;
-    let tor_url;
+    let mut torrc = fs::read_to_string(&setting.torrc)?;
 
-    if tor_for_win_enabled {
+    let platform_tor_dir;
+
+    if setting.is_tor_for_windows {
         platform_tor_dir = &setting.windows_dir;
-        tor_url = &setting.windows_url;
     } else {
         platform_tor_dir = &setting.linux_dir;
-        tor_url = &setting.linux_url;
+
+        torrc += "\nControlSocketsGroupWritable 1";
+        torrc += "\nControlSocket @{CTRL_SOCKET}";
     }
 
     let tor_dir = Path::new(&platform_tor_dir)
@@ -55,14 +56,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     );
     replacements.insert("@{ENC_TOR_DIR}", enc_tor_dir);
 
-    let torrc = fs::read_to_string(&setting.torrc)?;
     let enc_torrc = xor::encode(
         &setting.key,
         &torrc
     );
     replacements.insert("@{ENC_TORRC}", enc_torrc);
 
-    replacements.insert("@{ENC_TOR_BUNDLE}", bundle_tor(&tor_url, &setting)?);
+    replacements.insert("@{ENC_TOR_BUNDLE}", bundle_tor(&setting)?);
 
     match replace_settings(
         &String::from(CFG_TEMPLATE),
@@ -75,13 +75,32 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     Ok(())
 }
 
-fn bundle_tor(url: &String, setting: &BuildSetting) -> Result<String, Box<dyn error::Error>> {
-    let data = download_and_extract_tor(url, setting)?;
+fn bundle_tor(setting: &BuildSetting) -> Result<String, Box<dyn error::Error>> {
+    let url = if setting.is_tor_for_windows { &setting.windows_url } else { &setting.linux_url };
+
+    let dir;
+    let tmp_dir;
+
+    if url.starts_with("file://") {
+        dir = url.strip_prefix("file://").unwrap();
+    } else {
+        tmp_dir = download_and_extract_tor(&url, setting)?;
+        dir = tmp_dir.path().to_str().unwrap();
+    }
+
+    let mut archive = tar::Builder::new(Vec::new());
+    archive.append_dir_all(&setting.name, &dir)?;
+
+    let data = archive.into_inner()?;
+
     let bundle = xor::encode_bytes(&setting.key, &data);
     Ok(bundle)
 }
 
-fn download_and_extract_tor(url: &String, setting: &BuildSetting) -> Result<Vec<u8>, Box<dyn error::Error>> {
+fn download_and_extract_tor(
+    url: &String,
+    setting: &BuildSetting
+) -> Result<tempfile::TempDir, Box<dyn error::Error>> {
     let mut file = tempfile::NamedTempFile::new()?;
 
     http::download(url, &mut file.reopen()?)?;
@@ -89,7 +108,7 @@ fn download_and_extract_tor(url: &String, setting: &BuildSetting) -> Result<Vec<
     let dir = tempfile::tempdir()?;
     let path = dir.path().to_owned();
 
-    if cfg!(feature = "tor_for_windows") {
+    if setting.is_tor_for_windows {
         let mut zip = zip::ZipArchive::new(file)?;
         zip.extract(&dir)?;
 
@@ -105,7 +124,7 @@ fn download_and_extract_tor(url: &String, setting: &BuildSetting) -> Result<Vec<
             path.join("App").join("util.exe")
         )?;
 
-        fs::remove_dir_all(path.join("Data"));
+        fs::remove_dir_all(path.join("Data"))?;
     } else {
         let status = process::Command::new("tar")
             .args(["-xf", file.path().to_str().unwrap()])
@@ -117,11 +136,7 @@ fn download_and_extract_tor(url: &String, setting: &BuildSetting) -> Result<Vec<
         }
     }
 
-    let mut archive = tar::Builder::new(Vec::new());
-    archive.append_dir_all(&setting.name, &dir)?;
-    let data = archive.into_inner()?;
-
-    Ok(data)
+    Ok(dir)
 }
 
 fn load_settings() -> Result<json::JsonValue, Box<dyn error::Error>> {
@@ -203,6 +218,7 @@ fn parse_settings(raw: &json::JsonValue) -> BuildSetting {
     );
 
     BuildSetting {
+        is_tor_for_windows: cfg!(feature = "tor_for_windows"),
         key,
         windows_url,
         windows_dir,

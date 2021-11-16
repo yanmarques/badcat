@@ -63,11 +63,6 @@ fn unbundle_torrc(
 ) -> Result<(), Box<dyn error::Error>> {
     let mut contents = setting.torrc.clone();
 
-    if cfg!(linux) {
-        contents += "\nControlSocketsGroupWritable 1";
-        contents += "\nControlSocket @{CTRL_SOCKET}";
-    }
-
     contents = contents.replace(
         "@{DATA_DIR}",
         setting.tor_dir.to_str().unwrap()
