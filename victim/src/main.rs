@@ -1,11 +1,12 @@
 mod config;
-mod xor;
 mod setting;
 
 use std::{io, error};
 use std::fs::File;
 use std::path::{PathBuf};
 use std::process::{Command, Stdio};
+
+use badcat_lib::xor;
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     let setting: setting::Setting = load_settings();

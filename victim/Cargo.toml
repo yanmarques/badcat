@@ -1,0 +1,21 @@
+[package]
+name = "victim"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+badcat = { path = "../" }
+tar = "0.4.37"
+dirs = "4.0.0"
+
+[build-dependencies]
+badcat = { path = "../" }
+json = "0.11.0"
+tempfile = "3.2.0"
+zip = "0.5"
+tar = "0.4.37"
+
+[features]
+tor_for_windows = []

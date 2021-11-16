@@ -1,18 +1,8 @@
 [package]
-name = "badcat"
+name = "attacker"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[workspace]
-members = ["victim", "attacker"]
-
-[lib]
-name = "badcat_lib"
-path = "src/lib.rs"
-
 [dependencies]
-base64 = "0.13.0"
-rand = "0.8.0"
-ureq = "2.3.0"

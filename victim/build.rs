@@ -1,13 +1,7 @@
-mod src;
+use std::{fs, error, collections, process};
+use std::path::Path;
 
-extern crate rand;
-
-use std::{fs, error, collections, process, io};
-use src::{xor, setting, http};
-use std::path::{PathBuf, Path};
-use std::fs::File;
-use std::io::Write;
-
+use badcat_lib::{xor, http};
 
 const CFG_TEMPLATE: &str = "config.rs.template";
 const CFG_DESTINATION: &str = "src/config.rs";
@@ -101,7 +95,7 @@ fn download_and_extract_tor(
     url: &String,
     setting: &BuildSetting
 ) -> Result<tempfile::TempDir, Box<dyn error::Error>> {
-    let mut file = tempfile::NamedTempFile::new()?;
+    let file = tempfile::NamedTempFile::new()?;
 
     http::download(url, &mut file.reopen()?)?;
 
@@ -140,7 +134,8 @@ fn download_and_extract_tor(
 }
 
 fn load_settings() -> Result<json::JsonValue, Box<dyn error::Error>> {
-    let source = fs::read_to_string("settings.json")?;
+    let source = fs::read_to_string("settings.json")
+        .expect("failed to read settings");
     Ok(json::parse(&source)?)
 }
 
