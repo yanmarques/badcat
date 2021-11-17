@@ -1,3 +1,2 @@
-pub mod xor;
-pub mod setting;
-pub mod http;
+mod config;
+mod setting;

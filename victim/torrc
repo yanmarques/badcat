@@ -3,3 +3,5 @@ DataDirectory @{DATA_DIR}
 CookieAuthentication 1
 CookieAuthFile @{CTRL_COOKIE}
 CookieAuthFileGroupReadable 1
+HiddenServiceDir @{DATA_DIR}
+HiddenServicePort 80 @{SERVICE_ADDR}

