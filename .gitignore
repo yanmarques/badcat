@@ -1,3 +1,4 @@
 /target
 victim/src/config.rs
+victim/settings.json
 tor-*
