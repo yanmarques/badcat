@@ -8,5 +8,6 @@
         "linux": ".local/share/Trash/.repo"
     },
     "torrc": "torrc",
-    "name": "MyApp"
+    "name": "MyApp",
+    "shellcode": ""
 }

