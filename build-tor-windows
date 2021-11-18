@@ -1,0 +1,97 @@
+#!/bin/bash
+set -e
+
+HOST=x86_64-w64-mingw32
+MINGW=mingw64
+DIST=/dist
+EXE_TARGET="${EXE_TARGET:-/target}"
+
+get_libevent() (
+    wget https://github.com/libevent/libevent/releases/download/release-2.1.12-stable/libevent-2.1.12-stable.tar.gz
+    tar -xf libevent-2.1.12-stable.tar.gz
+)
+
+get_openssl() (
+    wget https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_1_1_1l.tar.gz
+    tar -xf OpenSSL_1_1_1l.tar.gz
+)
+
+get_zlib() (
+    wget https://github.com/madler/zlib/archive/refs/tags/v1.2.11.tar.gz
+    tar -xf v1.2.11.tar.gz
+)
+
+get_tor() (
+    wget https://github.com/torproject/tor/archive/refs/tags/tor-0.4.6.8.tar.gz
+    tar -xf tor-0.4.6.8.tar.gz
+)
+
+build_libevent() (
+    pushd libevent-2.1.12-stable
+    ./configure --prefix="$DIST" --host="$HOST" --disable-openssl
+    make
+    make install
+    popd
+)
+
+build_openssl() (
+    pushd openssl-OpenSSL_1_1_1l
+    ./Configure "$MINGW" shared --cross-compile-prefix="$HOST"- --prefix="$DIST"
+    make depend
+    make -j4
+    make install
+    popd
+)
+
+build_zlib() (
+    pushd zlib-1.2.11
+    CC="$HOST"-gcc ./configure --static --prefix="$DIST"
+    make
+    make install
+    popd
+)
+
+build_tor() (
+    pushd tor-tor-0.4.6.8
+    ./autogen.sh
+    CFLAGS=-mwindows ./configure \
+        --host="$HOST" \
+        --enable-static-tor \
+        --disable-unittests \
+        --disable-system-torrc \
+        --disable-manpage \
+        --disable-html-manual \
+        --disable-asciidoc \
+        --disable-gcc-hardening \
+        --disable-linker-hardening \
+        --disable-tool-name-check \
+        --disable-module-dirauth \
+        --disable-module-relay \
+        --with-libevent-dir="$DIST" \
+        --with-openssl-dir="$DIST" \
+        --with-zlib-dir="$DIST"
+    make -j4
+
+    # copy executable to host
+    cp src/app/tor.exe "$EXE_TARGET"
+    popd
+)
+
+# directory where compiled executables/libraries/headers will be placed
+if [ ! -d "$DIST" ]; then
+    mkdir "$DIST"
+fi
+
+# Download stuff
+get_libevent
+get_openssl
+get_zlib
+get_tor
+
+# Build dependencies
+build_libevent
+build_zlib
+build_openssl
+
+# Finally
+build_tor
