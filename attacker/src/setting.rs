@@ -1,11 +1,11 @@
-use std::{error, fs};
 use std::path::PathBuf;
+use std::{error, fs};
 
 use json::JsonValue;
 
 pub struct Setting {
     pub address: String,
-    pub uses_payload: bool
+    pub uses_payload: bool,
 }
 
 pub fn from(path: &PathBuf) -> Result<Vec<Setting>, Box<dyn error::Error>> {
@@ -20,24 +20,21 @@ fn load_json(path: &PathBuf) -> Result<JsonValue, Box<dyn error::Error>> {
 }
 
 fn parse_json(settings: &JsonValue) -> Result<Vec<Setting>, Box<dyn error::Error>> {
-    let result = settings.members().map(|inner| {
-        let address = String::from(
-            inner["address"]
-                .as_str()
-                .unwrap_or_else(|| {
-                    panic!("invalid address settings");
-                })
-        );
+    let result = settings
+        .members()
+        .map(|inner| {
+            let address = String::from(inner["address"].as_str().unwrap_or_else(|| {
+                panic!("invalid address settings");
+            }));
 
-        let uses_payload = inner["uses_payload"]
-                .as_bool()
-                .unwrap_or(false);
+            let uses_payload = inner["uses_payload"].as_bool().unwrap_or(false);
 
-        Setting {
-            address,
-            uses_payload
-        }
-    }).collect();
+            Setting {
+                address,
+                uses_payload,
+            }
+        })
+        .collect();
 
     Ok(result)
 }

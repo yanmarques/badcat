@@ -2,8 +2,8 @@ mod setting;
 
 extern crate clap;
 
-use std::{path, error};
 use std::io::Write;
+use std::{path, error};
 
 use fast_socks5::{client::{Socks5Stream, Config}, Result as SocksResult};
 use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
@@ -32,7 +32,7 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
     let socks_address = matches.value_of("tor_socks_address").unwrap();
     let settings = setting::from(&hosts_file)?;
 
-    println!("Connect to your victim.");
+    println!("Badcat attacker toolkit. Connect to your hosts");
     println!("Type help for commands.");
     println!("");
 

