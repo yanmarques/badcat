@@ -38,4 +38,3 @@ fn parse_json(settings: &JsonValue) -> Result<Vec<Setting>, Box<dyn error::Error
 
     Ok(result)
 }
-
