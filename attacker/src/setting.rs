@@ -6,6 +6,7 @@ use json::JsonValue;
 pub struct Setting {
     pub address: String,
     pub uses_payload: bool,
+    pub name: String,
 }
 
 pub fn from(path: &PathBuf) -> Result<Vec<Setting>, Box<dyn error::Error>> {
@@ -24,12 +25,17 @@ fn parse_json(settings: &JsonValue) -> Result<Vec<Setting>, Box<dyn error::Error
         .members()
         .map(|inner| {
             let address = String::from(inner["address"].as_str().unwrap_or_else(|| {
-                panic!("invalid address settings");
+                panic!("invalid address setting");
             }));
 
             let uses_payload = inner["uses_payload"].as_bool().unwrap_or(false);
 
+            let name = String::from(inner["name"].as_str().unwrap_or_else(|| {
+                panic!("invalid name setting");
+            }));
+
             Setting {
+                name,
                 address,
                 uses_payload,
             }

