@@ -147,10 +147,13 @@ fn bind_shell(stream: TcpStream) -> Result<(), Box<dyn error::Error>> {
     let stream_writer = stream.try_clone()?;
 
     // read from socket, write to stdout
-    pipe_io(stream_reader, io::stdout()).join().unwrap();
+    let in_thread = pipe_io(stream_reader, io::stdout());
 
     // read from stdin, write to socket
-    pipe_io(io::stdin(), stream_writer).join().unwrap();
+    let out_thread = pipe_io(io::stdin(), stream_writer);
+
+    in_thread.join().unwrap();
+    out_thread.join().unwrap();
 
     Ok(())
 }
