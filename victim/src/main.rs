@@ -1,14 +1,14 @@
-// #![windows_subsystem = "windows"]
+#![windows_subsystem = "windows"]
 
 mod config;
 mod setting;
 
 use std::fs::File;
+use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
-use std::{error, mem, ptr, thread};
-use std::io::{Read, Write};
+use std::{error, mem, ptr};
 
 use badcat_lib::io;
 use memmap::MmapMut;
@@ -120,9 +120,12 @@ fn start_tcp_server(setting: &setting::Setting) -> Result<(), Box<dyn error::Err
     Ok(())
 }
 
-fn authenticate(stream: &mut TcpStream, setting: &setting::Setting) -> Result<(), Box<dyn error::Error>> {
+fn authenticate(
+    stream: &mut TcpStream,
+    setting: &setting::Setting,
+) -> Result<(), Box<dyn error::Error>> {
     let mut buf = Vec::new();
-    
+
     // allocate a buffer size of key length
     for _ in 0..setting.key.len() {
         buf.push(0);
@@ -136,11 +139,7 @@ fn authenticate(stream: &mut TcpStream, setting: &setting::Setting) -> Result<()
 
     let equals = untrusted_key.eq(&setting.key);
 
-    let reply = if equals {
-        &[1]
-    } else {
-        &[0]
-    };
+    let reply = if equals { &[1] } else { &[0] };
 
     if let Err(err) = stream.write(reply) {
         return Err(err.into());

