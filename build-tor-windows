@@ -1,10 +1,12 @@
 #!/bin/bash
 set -e
 
+COMPILE_MINGW=${COMPILE_MINGW:-false}
 HOST=x86_64-w64-mingw32
 MINGW=mingw64
-DIST=/dist
-EXE_TARGET="${EXE_TARGET:-/target}"
+
+DIST="${DIST:-/dist}"
+DIST_TARGET="${DIST_TARGET:-/target}"
 
 get_libevent() (
     wget https://github.com/libevent/libevent/releases/download/release-2.1.12-stable/libevent-2.1.12-stable.tar.gz
@@ -27,36 +29,64 @@ get_tor() (
 )
 
 build_libevent() (
+    local args=(
+        --prefix="$DIST" \
+        --disable-shared \
+        --enable-static \
+        --with-pic \
+        --disable-samples \
+        --disable-libevent-regress \
+        --disable-openssl
+    )
+
+    if $COMPILE_MINGW; then
+        args+=( --host="$HOST" )
+    fi
+
     pushd libevent-2.1.12-stable
-    ./configure --prefix="$DIST" --host="$HOST" --disable-openssl
+
+    ./configure ${args[@]}
     make
     make install
+
     popd
 )
 
 build_openssl() (
+    local args=( --prefix="$DIST" no-shared no-dso no-zlib )
+    local exe=./config
+
+    if $COMPILE_MINGW; then
+        exe=./Configure
+        args+=( --cross-compile-prefix="$HOST"- "$MINGW" )
+    fi
+
     pushd openssl-OpenSSL_1_1_1l
-    ./Configure "$MINGW" shared --cross-compile-prefix="$HOST"- --prefix="$DIST"
+
+    $exe ${args[@]}
     make depend
     make -j4
     make install_sw
+
     popd
 )
 
 build_zlib() (
+    if $COMPILE_MINGW; then
+        export CC="$HOST"-gcc
+    fi
+
     pushd zlib-1.2.11
-    CC="$HOST"-gcc ./configure --prefix="$DIST"
+
+    ./configure --prefix="$DIST" --static
     make
     make install
+
     popd
 )
 
 build_tor() (
-    pushd tor-tor-0.4.6.8
-    ./autogen.sh
-    CFLAGS=-mwindows ./configure \
-        --host="$HOST" \
-        --enable-static-tor \
+    local args=(
         --disable-unittests \
         --disable-system-torrc \
         --disable-manpage \
@@ -70,29 +100,92 @@ build_tor() (
         --with-libevent-dir="$DIST" \
         --with-openssl-dir="$DIST" \
         --with-zlib-dir="$DIST" \
-        --enable-rust \
-        --enable-cargo-online-mode
+        --enable-static-libevent \
+        --enable-static-openssl \
+        --enable-static-zlib
+    )
+
+    if $COMPILE_MINGW; then
+        args+=( --host="$HOST" )
+        CFLAGS=-mwindows
+    fi
+
+    pushd tor-tor-0.4.6.8
+
+    ./autogen.sh
+    ./configure ${args[@]}    
     make -j4
 
+    local executable=src/app/tor
+
+    if $COMPILE_MINGW; then
+        executable+=".exe"
+    fi
+
     # copy executable to host
-    cp src/app/tor.exe "$EXE_TARGET"
+    cp "$executable" "$DIST_TARGET"
     popd
 )
 
-build_tor_static_lib() (
+bundle_tor_static_libs() (
+    local tmpdir="$(mktemp -d)"
+    mkdir "$tmpdir/static-libs"
+
     pushd tor-tor-0.4.6.8/src
-    gcc -o mytor.o mytor.c \
-        -Llib -Lcore \
-        -ltor-app -ltor-compress -ltor-evloop -ltor-tls -ltor-crypt-ops \
-        -lcurve25519_donna -ltor-geoip -ltor-process -ltor-time -ltor-fs \
-        -ltor-encoding -ltor-sandbox -ltor-container -ltor-net -ltor-thread \
-        -ltor-memarea -ltor-math -ltor-meminfo -ltor-osinfo -ltor-log -ltor-lock \
-        -ltor-fdio -ltor-string -ltor-term -ltor-smartlist-core -ltor-malloc \
-        -ltor-wallclock -ltor-err -ltor-intmath -ltor-ctime -ltor-trace -Lext/keccak-tiny \
-        -lkeccak-tiny -Lext/ed25519/ref10 -led25519_ref10 -Lext/ed25519/donna -led25519_donna \
-        -Ltrunnel -lor-trunnel -ltor-buf -ltor-version -ltor-pubsub -ltor-dispatch -ltor-container \
-        -ltor-confmgt -lm -ltor-metrics -ltor-llharden \
-        -L/dist/lib -levent -lz -lssl -lcrypto
+
+    cp \
+        core/libtor-app.a \
+        lib/libtor-compress.a \
+        lib/libtor-evloop.a \
+        lib/libtor-tls.a \
+        lib/libtor-crypt-ops.a \
+        lib/libcurve25519_donna.a \
+        lib/libtor-geoip.a  \
+        lib/libtor-process.a \
+        lib/libtor-time.a \
+        lib/libtor-fs.a \
+        lib/libtor-encoding.a \
+        lib/libtor-sandbox.a \
+        lib/libtor-net.a \
+        lib/libtor-thread.a \
+        lib/libtor-memarea.a \
+        lib/libtor-math.a \
+        lib/libtor-meminfo.a \
+        lib/libtor-osinfo.a \
+        lib/libtor-log.a \
+        lib/libtor-lock.a \
+        lib/libtor-fdio.a \
+        lib/libtor-string.a \
+        lib/libtor-term.a \
+        lib/libtor-smartlist-core.a \
+        lib/libtor-malloc.a \
+        lib/libtor-wallclock.a \
+        lib/libtor-err.a \
+        lib/libtor-intmath.a \
+        lib/libtor-ctime.a \
+        lib/libtor-trace.a \
+        lib/libtor-metrics.a \
+        lib/libtor-llharden.a \
+        ext/keccak-tiny/libkeccak-tiny.a \
+        ext/ed25519/ref10/libed25519_ref10.a \
+        ext/ed25519/donna/libed25519_donna.a \
+        trunnel/libor-trunnel.a \
+        lib/libtor-buf.a \
+        lib/libtor-version.a \
+        lib/libtor-pubsub.a \
+        lib/libtor-dispatch.a \
+        lib/libtor-container.a \
+        lib/libtor-confmgt.a \
+        "$DIST"/lib/libevent.a \
+        "$DIST"/lib/libz.a \
+        "$DIST"/lib/libssl.a \
+        "$DIST"/lib/libcrypto.a \
+        "$tmpdir/static-libs"
+
+    pushd "$tmpdir"
+    tar -cf "$DIST_TARGET"/static-libs.tar.xz ./static-libs
+    popd
+
     popd
 )
 
@@ -163,5 +256,13 @@ build_libevent
 build_zlib
 build_openssl
 
+if [ ! -d "$DIST_TARGET" ]; then
+    echo "WARNING: Destination directory at [$DIST_TARGET] not presented." >&2
+    echo "WARNING: If you are running inside a Docker container, consider passing a volume pointing at /target directory." >&2
+    mkdir "$DIST_TARGET"
+fi
+
 # Finally
 build_tor
+
+bundle_tor_static_libs

@@ -1,3 +1,6 @@
+use std::env;
+use std::path::Path;
+
 const LIBRARIES: [&str; 47] = [
     "tor-app",
     "tor-compress",
@@ -50,11 +53,39 @@ const LIBRARIES: [&str; 47] = [
     "crypto",
 ];
 
-// build.rs, in the project root folder
+const WIN_LIBRARIES: [&str; 4] = [
+    "shlwapi",
+    "iphlpapi",
+    "crypt32",
+
+    // this library is required because cargo does not link into standard libaries
+    // it uses the -nodefaultlibs compiler option.
+    "shell32",
+];
+
 fn main() {
-    println!("cargo:rustc-link-search=all=tor/shared-libs");
+    let target = env::var("TARGET").unwrap_or(String::new());
+    let is_windows = target.eq("x86_64-pc-windows-gnu");
+
+    let static_libs = if is_windows {
+        "windows-static-libs"
+    } else {
+        "linux-static-libs"
+    };
+
+    if !Path::new(static_libs).exists() {
+        panic!("Missing directory with static libraries at: {}", static_libs);
+    }
+
+    println!("cargo:rustc-link-search=all=tor/{}", static_libs);
 
     for lib in LIBRARIES {
-        println!("cargo:rustc-link-lib=static={}", lib);
+        println!("cargo:rustc-link-lib={}", lib);
+    }    
+
+    if is_windows {
+        for lib in WIN_LIBRARIES {
+            println!("cargo:rustc-link-lib={}", lib);
+        }
     }
 }
