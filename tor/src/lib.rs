@@ -19,7 +19,3 @@ pub fn start(torrc: &str) {
         tor_main(argv.len(), argv.as_ptr());
     }
 }
-
-fn main() {
-    start("/etc/torrc");
-}
