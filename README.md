@@ -166,8 +166,7 @@ That seems fine. You may now had noticed that a new file called `hosts.json` was
 
 Deliver the generated executable to the _victim_ and execute.
 
-
-IMAGE
+![Windows screenshot of running _backdoor_](https://user-images.githubusercontent.com/28604565/143434657-6e080c8b-479a-456f-8547-d8840bb5ebb4.png)
 
 Configure Tor at your attacker machine and connect to the victim through the attacker toolkit.
 
