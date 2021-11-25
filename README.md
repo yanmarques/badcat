@@ -382,4 +382,5 @@ Your payload should be accessible now at: aqti2jzrbmniqsnwmi3zmxxy3edynawa472ywd
 
 After you have connected, fire up `msfconsole` using `proxychains` in order for open a meterpreter session through the Tor network. It's fundamental that msfconsole is proxied through the Tor network.
 
-IMAGE
+![Msfconsole opened with session from badcat](https://user-images.githubusercontent.com/28604565/143482772-40267d27-9e9e-4f41-80e9-c956e5432be0.png)
+
