@@ -170,7 +170,7 @@ Deliver the generated executable to the _victim_ and execute it. In the image be
 
 Now configure Tor at your attacker machine and connect to the victim through the attacker toolkit. The attacker toolkit already uses the default Tor socks address.
 
-IMAGE
+![Attacker toolkit connected to _backdoor_](https://user-images.githubusercontent.com/28604565/143600952-b127192f-3aff-4114-b76e-bd7704ce4f0b.png)
 
 ## Advanced Usage
 
