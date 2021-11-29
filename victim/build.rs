@@ -99,8 +99,7 @@ ControlSocket @{CTRL_SOCKET}
         // add a hidden service for the payload
         torrc += &format!(
             "\nHiddenServicePort {} 127.0.0.1:{}\n",
-            &setting.payload_port,
-            &setting.payload_port
+            &setting.payload_port, &setting.payload_port
         );
     }
 
@@ -132,7 +131,10 @@ fn encode_payload(setting: &BuildSetting) -> Result<String, Box<dyn error::Error
 
 fn add_host(address: String, setting: &BuildSetting) -> Result<(), Box<dyn error::Error>> {
     let mut hosts = match fs::read_to_string(&setting.hosts_file) {
-        Ok(data) => json::parse(&data).expect(&format!("failed to read json at {}", &setting.hosts_file.to_str().unwrap())),
+        Ok(data) => json::parse(&data).expect(&format!(
+            "failed to read json at {}",
+            &setting.hosts_file.to_str().unwrap()
+        )),
         Err(_) => json::JsonValue::new_array(),
     };
 

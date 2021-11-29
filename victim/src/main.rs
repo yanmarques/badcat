@@ -112,9 +112,12 @@ fn start_tcp_server(setting: &setting::Setting) -> Result<(), Box<dyn error::Err
     Ok(())
 }
 
-fn authenticate(stream: &mut TcpStream, setting: &setting::Setting) -> Result<(), Box<dyn error::Error>> {
+fn authenticate(
+    stream: &mut TcpStream,
+    setting: &setting::Setting,
+) -> Result<(), Box<dyn error::Error>> {
     let mut buf = Vec::new();
-    
+
     // allocate a buffer size of key length
     for _ in 0..setting.key.len() {
         buf.push(0);
@@ -128,11 +131,7 @@ fn authenticate(stream: &mut TcpStream, setting: &setting::Setting) -> Result<()
 
     let equals = untrusted_key.eq(&setting.key);
 
-    let reply = if equals {
-        &[1]
-    } else {
-        &[0]
-    };
+    let reply = if equals { &[1] } else { &[0] };
 
     if let Err(err) = stream.write(reply) {
         return Err(err.into());
