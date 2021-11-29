@@ -580,6 +580,7 @@ dependencies = [
  "json",
  "tar",
  "tempfile",
+ "tor",
  "zip",
 ]
 
