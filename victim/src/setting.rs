@@ -33,10 +33,7 @@ impl Setting {
 pub fn load_settings() -> Result<Setting, Box<dyn error::Error>> {
     let key = config::ENC_KEY.to_owned();
 
-    let data = xor::decode(
-        &key,
-        &config::ENC_DATA.to_owned(),
-    )?;
+    let data = xor::decode(&key, &config::ENC_DATA.to_owned())?;
 
     let data = json::parse(&data)?;
 

