@@ -16,7 +16,7 @@ _server_: _backdoor_ running Tor Onion Service on the _victim_.
 # Features
 
 1. Embeded Tor executable inside the _backdoor_. No need to create a new process for the Tor binary.
-2. Automatic Hidden Service configuration using a configurable torrc template.
+2. Automatic Onion Service configuration using a configurable torrc template.
 3. Authentication to access the _server_.
 4. Optional use of payload (aka shellcode) in the _backdoor_, which is only executed once the attacker connects evading any AV real time monitoring. When not using a payload, fallback to badcat's basic shell.
 5. Execution of payload can be re-started many times from the attacker.
