@@ -4,6 +4,7 @@ use std::{collections, env, error, io, fs, process};
 
 use badcat_lib::{secrets, xor};
 use json::JsonValue;
+use tor::HiddenService;
 
 const CFG_TEMPLATE: &str = "config.rs.template";
 const CFG_DESTINATION: &str = "src/config.rs";
@@ -69,15 +70,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 fn encode_bundle(setting: &BuildSetting) -> Result<String, Box<dyn error::Error>> {
     let dir = tempfile::tempdir()?;
 
-    let hs_addr = generate_hs_secrets(&dir.path())?;
+    let hs = HiddenService::new()?;
+    hs.to_fs(dir.path().to_path_buf());
 
-    add_host(hs_addr, &setting)?;
+    add_host(hs.hostname, &setting)?;
 
     let mut buf = Vec::<u8>::new();
 
     {
         let mut archive = tar::Builder::new(&mut buf);
-
         archive.append_dir_all(".", &dir)?;
     }
 
@@ -148,46 +149,6 @@ fn add_host(address: String, setting: &BuildSetting) -> Result<(), Box<dyn error
     fs::write(&setting.hosts_file, hosts.pretty(4))?;
 
     Ok(())
-}
-
-/// Generate the Tor Hidden Service information into `to_dir` directory
-/// and return the generated hostname. 
-fn generate_hs_secrets(to_dir: &Path) -> Result<String, Box<dyn error::Error>> {
-    let temp_dir = tempfile::tempdir()?;
-
-    let proc = process::Command::new("mkp224o")
-        .args([
-            "-n",
-            "1",
-            "-d",
-            temp_dir.path().to_str().unwrap(),
-            "-q",
-            "a",
-        ])
-        .output()?;
-
-    if !proc.status.success() {
-        println!("{}", String::from_utf8(proc.stderr)?);
-        return Err(String::from("problem generating hidden service keys").into());
-    }
-
-    let output = String::from_utf8(proc.stdout)?;
-    let hs_addr = output.strip_suffix("\n").unwrap();
-
-    // mkp224o stores the files with this structure
-    let secrets_dir = temp_dir.path().join(hs_addr);
-
-    fs::copy(secrets_dir.join("hostname"), to_dir.join("hostname"))?;
-    fs::copy(
-        secrets_dir.join("hs_ed25519_public_key"),
-        to_dir.join("hs_ed25519_public_key"),
-    )?;
-    fs::copy(
-        secrets_dir.join("hs_ed25519_secret_key"),
-        to_dir.join("hs_ed25519_secret_key"),
-    )?;
-
-    Ok(String::from(hs_addr))
 }
 
 /// Read the default settings file and parse into a json object.
