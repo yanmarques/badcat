@@ -169,12 +169,12 @@ That seems fine. You may now had noticed that a new file called `hosts.json` was
 
 Deliver the generated executable to the _victim_ and execute it. The figure 1 shows the size of the _backdoor_ and the date which Microsoft Windows Defender does not catch it.
 
-Figure 1 
+Figure 1 - Windows screenshot of running _backdoor_
 ![Windows screenshot of running _backdoor_](https://user-images.githubusercontent.com/28604565/144435072-3c5d9eac-7abf-4c57-905a-e2b2d75c1b1f.png)
 
 Now configure Tor at your attacker machine and connect to the victim through the attacker toolkit. The attacker toolkit already uses the default Tor socks address. The figure 2 presents the toolkit interface and the PowerShell opened for commands. 
 
-Figure 2
+Figure 2 - Attacker toolkit connected to _backdoor_
 ![Attacker toolkit connected to _backdoor_](https://user-images.githubusercontent.com/28604565/144435172-272add11-93ef-4515-8154-4b3ca73422c0.png)
 
 ## Advanced Usage
@@ -212,8 +212,9 @@ Generate your payload and write the raw bytes to a file. Then enable payload at 
 
 **Note: Before compiling your _backdoor_ and deliver as usual, ensure the build target is the right one for your payload. I mean, if you are using a Linux payload you could target Windows, but the payload would never execute properly.**
 
-When connecting, the attacker toolkit will execute the payload for you, but nothing will really show up. Instead you'll be able to connect directly to your shell using the onion address and the port as `settings.payload.bind_port` - 4444 in our example.
+When connecting, the attacker toolkit will execute the payload for you, but according to figure 3, nothing will really show up. Instead you'll be able to connect directly to your shell using the onion address and the port as `settings.payload.bind_port` - 4444 in our example.
 
+Figure 3 - Attacker toolkit message about the payload
 ![Attacker toolkit message about the payload](https://user-images.githubusercontent.com/28604565/144483939-e72bc74c-5e0f-481c-b14c-b639bde7de2a.png)
 
 ### 2. Connect through a meterpreter session
@@ -251,9 +252,10 @@ Then enable payload at your `settings.json` and update them to reflect your payl
 
 Now compile your _backdoor_ and deliver as usual.
 
-In the moment the _attacker_ connects and payload is going be executed on the _victim_, one may see the common Microsoft Windows Defender Alert, ilustrated on figure 4. This alert is extremelly generic, and users tend to ignore such alerts because it does not say it's a malware. But thats kind of funny that the payload was already executed and the port is listening in the background. And even if one does not `Allow access`, the payload keeps running and Windows does nothing about it.
+In the moment the _attacker_ connects and payload is going be executed on the _victim_, one may see the common Microsoft Windows Defender - useless - Alert, ilustrated on figure 4. This alert is extremelly generic, and users tend to ignore such alerts because it does not say it's a malware. But thats kind of funny that the payload was already executed and the port is listening in the background. And even if one does not `Allow access`, the payload keeps running and Windows does nothing about it.
 
-IMAGE
+Figure 4 - Microsoft Windows Defender Alert
+![Microsoft Windows Defender useless Alert](https://user-images.githubusercontent.com/28604565/144487035-746a3e80-155e-42d5-b75b-cbe8f7fcb054.png)
 
 After `Canceling` or `Allowing access` through Microsoft Windows Defender Alert, you are able to connect directly to your meterpreter session using the onion address and the port as `settings.payload.bind_port` `6666` in our example.
 
@@ -261,5 +263,7 @@ Fire up `msfconsole` - using `proxychains` or something similar - in order to op
 
 With `msfconsole` opened, configure a handler for your payload and exploit it.
 
-IMAGE2
+Figure 5 - Meterpreter session opened through badcat
+![Meterpreter session opened through badcat](https://user-images.githubusercontent.com/28604565/144487158-6ef721e7-2d2b-498c-a6c0-038434872182.png)
+
 
