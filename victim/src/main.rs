@@ -54,16 +54,6 @@ fn unbundle_torrc(path: &PathBuf, port: u16, setting: &Setting) -> io::Result<()
 
     contents = contents.replace("@{DATA_DIR}", setting.tor_dir.to_str().unwrap());
 
-    contents = contents.replace(
-        "@{CTRL_COOKIE}",
-        setting.tor_dir.join("ctrl.cookie").to_str().unwrap(),
-    );
-
-    contents = contents.replace(
-        "@{CTRL_SOCKET}",
-        setting.tor_dir.join("ctrl.socket").to_str().unwrap(),
-    );
-
     contents = contents.replace("@{SERVICE_ADDR}", &format!("127.0.0.1:{}", port));
 
     fs::write(&path, &contents)
