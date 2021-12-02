@@ -15,6 +15,7 @@ memmap = "0.7.0"
 
 [build-dependencies]
 badcat = { path = "../" }
+tor = { path = "../tor" }
 json = "0.11.0"
 tempfile = "3.2.0"
 tar = "0.4.37"

@@ -1,5 +1,6 @@
 {
     "files.associations": {
-        "connection.h": "c"
+        "connection.h": "c",
+        "limits.h": "c"
     }
 }

@@ -204,8 +204,9 @@ fn do_connect(
                     if target.uses_payload {
                         success(
                             format!(
-                                "payload should be accessible now at: {}:PAYLOAD_PORT",
-                                target.address
+                                "payload should be accessible now at: {}:{}",
+                                target.address,
+                                target.payload_port,
                             )
                         )?;
                     } else {

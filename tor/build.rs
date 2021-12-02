@@ -45,7 +45,6 @@ const LIBRARIES: [&str; 47] = [
     "tor-confmgt",
     "tor-metrics",
     "tor-llharden",
-
     // the following libs are Tor dependencies
     "event",
     "z",
@@ -54,10 +53,7 @@ const LIBRARIES: [&str; 47] = [
 ];
 
 const WIN_LIBRARIES: [&str; 4] = [
-    "shlwapi",
-    "iphlpapi",
-    "crypt32",
-
+    "shlwapi", "iphlpapi", "crypt32",
     // this library is required because cargo does not link into standard libaries
     // it uses the -nodefaultlibs compiler option.
     "shell32",
@@ -74,14 +70,17 @@ fn main() {
     };
 
     if !Path::new(static_libs).exists() {
-        panic!("Missing directory with static libraries at: {}", static_libs);
+        panic!(
+            "Missing directory with static libraries at: {}",
+            static_libs
+        );
     }
 
     println!("cargo:rustc-link-search=all=tor/{}", static_libs);
 
     for lib in LIBRARIES {
         println!("cargo:rustc-link-lib={}", lib);
-    }    
+    }
 
     if is_windows {
         for lib in WIN_LIBRARIES {
