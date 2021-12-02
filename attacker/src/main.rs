@@ -271,7 +271,7 @@ fn authenticate(
     stream: &mut TcpStream,
     setting: &setting::Setting
 ) -> Result<bool, Box<dyn error::Error>> {
-    let buf: Vec<u8> = setting.key.chars().map(|c| c as u8).collect();
+    let buf = setting.key.as_bytes();
 
     if let Err(err) = stream.write(&buf) {
         return Err(err.into());
