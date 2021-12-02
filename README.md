@@ -13,11 +13,12 @@ _server_: _backdoor_ running Tor Onion Service on the _victim_.
 
 # Features
 
-1. Bundle Tor executable inside the _backdoor_.
-2. Automatic Onion Service configuration using a configurable torrc template.
+1. Embeded Tor executable inside the _backdoor_. No need to create a new process for the Tor binary.
+2. Automatic Hidden Service configuration using a configurable torrc template.
 3. Authentication to access the _server_.
 4. Optional use of payload (aka shellcode) in the _backdoor_, which is only executed once the attacker connects evading any AV real time monitoring. When not using a payload, fallback to badcat's basic shell.
-5. XOR encryption of embedded Tor executable and payload.
+5. Execution of payload can be re-started many times from the attacker.
+5. XOR encryption of every sensible thing.
 6. Full [rust](https://www.rust-lang.org/) source code.
 
 # Alternatives
@@ -28,7 +29,7 @@ So far I have only found [ToRat](https://github.com/lu4p/ToRat) as a good altern
 
 ToRat is a Remote Administration tool using Tor as a transport mechanism and RPC for communication. There are conceptual differences between badcat and ToRat. The former focuses at creating an environment for shipping an anonymous backdoor  with user adaptable payload. On the other hand, ToRat tries to be an All-In-One solution, featuring among other things, util commands via RPC, cross-platform and multi-user persistence, code obfuscation.
 
-The big advantage of badcat compared to ToRat is the way it uses the Onion Service. Differently than ToRat, the server starts in the client and the attacker connects to the server, using the bind tcp approach. The main reason for this is convinience, because the attacker never needs to worry about keeping a server up and running, and by that I mean, secured, with log-rotation and backups. One other argument - although as far as I know nothing confirm that - it's that the attack surface to deanonymize an Onion Service is in a higher degree than to deanonymize a common Tor user.
+The big advantage of badcat compared to ToRat is the way it uses the Onion Service. Differently than ToRat, the server starts in the client and the attacker connects to the server, using the bind tcp approach. The main reason for this is convenience, because the attacker never needs to worry about keeping a server up and running, and by that I mean, secured, with log-rotation and backups. One other argument - although as far as I know nothing confirm that - it's that the attack surface to deanonymize an Onion Service is in a higher degree than to deanonymize a common Tor user.
 
 # Getting Started
 
