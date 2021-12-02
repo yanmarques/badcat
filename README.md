@@ -29,9 +29,11 @@ So far I have only found [ToRat](https://github.com/lu4p/ToRat) as a good altern
 
 ## ToRat
 
-ToRat is a Remote Administration tool using Tor as a transport mechanism and RPC for communication. There are conceptual differences between badcat and ToRat. The former focuses at creating an environment for shipping an anonymous backdoor  with user adaptable payload. On the other hand, ToRat tries to be an All-In-One solution, featuring among other things, util commands via RPC, cross-platform and multi-user persistence, code obfuscation.
+ToRat is a Remote Administration tool using Tor as a transport mechanism and RPC for communication. There are conceptual differences between badcat and ToRat. The former focuses at creating an environment for shipping an anonymous backdoor with user adaptable payload. On the other hand, ToRat tries to be an All-In-One solution, featuring among other things, util commands via RPC, cross-platform and multi-user persistence, code obfuscation.
 
-The big advantage of badcat compared to ToRat is the way it uses the Onion Service. Differently than ToRat, the server starts in the client and the attacker connects to the server, using the bind tcp approach. The main reason for this is convenience, because the attacker never needs to worry about keeping a server up and running, and by that I mean, secured, with log-rotation and backups. One other argument - although as far as I know nothing confirm that - it's that the attack surface to deanonymize an Onion Service is in a higher degree than to deanonymize a common Tor user.
+The big advantage of badcat compared to ToRat is the way it uses the Onion Service. Differently than ToRat, the server starts in the client and the attacker connects to the server, using the bind tcp approach. In the situation you are behind a Tor proxy and can't change Tor's configuration, this approach can be benefitial.
+
+Also badcat support arbitrary payload execution in order to allow quick generation of full-featured backdoors shipping a Meterpreter shellcode, for example.
 
 # Getting Started
 
@@ -147,8 +149,8 @@ Finally we are able to compile the _backdoor_. Every time you build a _backdoor_
 
 Once you have created the configuration from the example, we are done to build the _backdoor_ using the default configurations, which are the following:
 
-- badcat's basic shell
-- Tor executable directly from The Tor Project, which - unfortunately - is compiled to open a Windows console by default. See [Invisible _backdoor_](#invisible-backdoor) section of how to fix that.
+- name of target host as `a host that knows you are them`. This name is used to identificate which machine to connect, so change them accordingly to keep yourself organized.
+- payload disabled, so badcat's basic shell will be used.
 
 Build the _backdoor_ targeting Windows x64:
 
@@ -163,7 +165,7 @@ $ file target/x86_64-pc-windows-gnu/release/victim.exe
 target/x86_64-pc-windows-gnu/release/victim.exe: PE32+ executable (GUI) x86-64, for MS Windows
 ```
 
-That seems fine. You may now had noticed that a new file called `hosts.json` was created. That is the configuration file used to connect to the _victim_ using the attacker toolkit.
+That seems fine. You may now had noticed that a new file called `hosts.json` was created. That is the configuration file used to connect to the _victim_ using the attacker toolkit. It contains a list of host objects, so whenever you build a new _backdoor_ the `hosts.json` is updated with the new host information.
 
 ### 4. Delivery and Control
 
