@@ -2,7 +2,7 @@
 
 This a tool intended to be used by Red Teams, in order to mimic APT ([Advanced Persistent Threat](https://csrc.nist.gov/glossary/term/advanced_persistent_threat)) attacks. It hides the C2 ([Command and Control](https://csrc.nist.gov/glossary/term/C2)) server by using [Onion Services](https://community.torproject.org/onion-services/overview/) to masquerade attacker's real IP address.
 
-The initial Proof of Concept is in the branch [initial-poc](tree/initial-poc). One will find there the first attempt to implement such idea. The initial PoC exists for historical reasons, and should only be used for testing.
+The initial Proof of Concept is in the branch [initial-poc](https://github.com/yanmarques/badcat/tree/initial-poc). One will find there the first attempt to implement such idea. The initial PoC exists for historical reasons, and should only be used for testing.
 
 # Glossary
 _attacker_: conductor of the attack.
