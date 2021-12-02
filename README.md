@@ -169,12 +169,14 @@ That seems fine. You may now had noticed that a new file called `hosts.json` was
 
 ### 4. Delivery and Control
 
-Deliver the generated executable to the _victim_ and execute it. In the image below you'll see a console opened, it's the Tor binary from The Tor Project.
+Deliver the generated executable to the _victim_ and execute it. The figure 1 shows the size of the _backdoor_ and the date which Microsoft Windows Defender does not catch it.
 
+Figure 1 
 ![Windows screenshot of running _backdoor_](https://user-images.githubusercontent.com/28604565/144435072-3c5d9eac-7abf-4c57-905a-e2b2d75c1b1f.png)
 
-Now configure Tor at your attacker machine and connect to the victim through the attacker toolkit. The attacker toolkit already uses the default Tor socks address.
+Now configure Tor at your attacker machine and connect to the victim through the attacker toolkit. The attacker toolkit already uses the default Tor socks address. The figure 2 presents the toolkit interface and the PowerShell opened for commands. 
 
+Figure 2
 ![Attacker toolkit connected to _backdoor_](https://user-images.githubusercontent.com/28604565/144435172-272add11-93ef-4515-8154-4b3ca73422c0.png)
 
 ## Advanced Usage
