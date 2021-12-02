@@ -37,6 +37,8 @@ Also badcat support arbitrary payload execution in order to allow quick generati
 
 # Getting Started
 
+To get started, one just need to configure the `rust` ecosystem, it's easy.
+
 ## Install Rust
 
 Follow the instructions to install `rustup` tool: https://www.rust-lang.org/tools/install.
@@ -89,6 +91,11 @@ We need to configure `rust` to target the Windows host.
 ```bash
 $ rustup target add x86_64-pc-windows-gnu
 $ rustup toolchain install stable-x86_64-pc-windows-gnu
+```
+
+And one may get the following output:
+
+```bash
 error: DEPRECATED: future versions of rustup will require --force-non-host to install a non-host toolchain as the default.
 warning: toolchain 'stable-x86_64-pc-windows-gnu' may not be able to run on this system.
 warning: If you meant to build software to target that platform, perhaps try `rustup target add x86_64-pc-windows-gnu` instead?
@@ -248,9 +255,11 @@ In the moment the _attacker_ connects and payload is going be executed on the _v
 
 IMAGE
 
-After `Canceling` or `Allowing access` through Microsoft Windows Defender Alert, you are able to connect directly to your meterpreter session using the onion address and the port as `settings.payload.bind_port` 6666 in our example.
+After `Canceling` or `Allowing access` through Microsoft Windows Defender Alert, you are able to connect directly to your meterpreter session using the onion address and the port as `settings.payload.bind_port` `6666` in our example.
 
-Fire up `msfconsole` - using `proxychains` or something similar - in order to open a meterpreter session through the Tor network. It's fundamental that msfconsole is proxied through the Tor network or one will not be able to connect to the _server_. After opened configure a handler for your payload and exploit it.
+Fire up `msfconsole` - using `proxychains` or something similar - in order to open a meterpreter session through the Tor network. It's fundamental that msfconsole is proxied through the Tor network or one will not be able to connect to the _server_. 
+
+With `msfconsole` opened, configure a handler for your payload and exploit it.
 
 IMAGE2
 
