@@ -1,5 +1,5 @@
 {
-    "name": "a host that knows you are them",
+    "name": "a host that knows you are hacking them",
     "hosts_file": "../hosts.json",
     "tor": {
         "spoof_dir": {
