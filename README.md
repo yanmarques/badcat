@@ -171,11 +171,11 @@ That seems fine. You may now had noticed that a new file called `hosts.json` was
 
 Deliver the generated executable to the _victim_ and execute it. In the image below you'll see a console opened, it's the Tor binary from The Tor Project.
 
-![Windows screenshot of running _backdoor_](https://user-images.githubusercontent.com/28604565/143434657-6e080c8b-479a-456f-8547-d8840bb5ebb4.png)
+![Windows screenshot of running _backdoor_](https://user-images.githubusercontent.com/28604565/144435072-3c5d9eac-7abf-4c57-905a-e2b2d75c1b1f.png)
 
 Now configure Tor at your attacker machine and connect to the victim through the attacker toolkit. The attacker toolkit already uses the default Tor socks address.
 
-![Attacker toolkit connected to _backdoor_](https://user-images.githubusercontent.com/28604565/143600952-b127192f-3aff-4114-b76e-bd7704ce4f0b.png)
+![Attacker toolkit connected to _backdoor_](https://user-images.githubusercontent.com/28604565/144435172-272add11-93ef-4515-8154-4b3ca73422c0.png)
 
 ## Advanced Usage
 
