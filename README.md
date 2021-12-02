@@ -207,7 +207,7 @@ Generate your payload and write the raw bytes to a file. Then enable payload at 
 
 When connecting, the attacker toolkit will execute the payload for you, but nothing will really show up. Instead you'll be able to connect directly to your shell using the onion address and the port as `settings.payload.bind_port` - 4444 in our example.
 
-IMAGE
+![Attacker toolkit message about the payload](https://user-images.githubusercontent.com/28604565/144483939-e72bc74c-5e0f-481c-b14c-b639bde7de2a.png)
 
 ### 2. Connect through a meterpreter session
 
