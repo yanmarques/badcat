@@ -28,6 +28,10 @@ get_tor() (
     tar -xf tor-0.4.6.8.tar.gz
 )
 
+patch_tor() (
+    patch -s -t -p0 < rust_hs.patch
+)
+
 build_libevent() (
     local args=(
         --prefix="$DIST" \
@@ -113,7 +117,11 @@ build_tor() (
     pushd tor-tor-0.4.6.8
 
     ./autogen.sh
-    ./configure ${args[@]}    
+    ./configure ${args[@]}
+
+    # disable linking to executable
+    sed -i 's/^CCLD \= \$(CC)/CCLD = true/' Makefile
+
     make -j4
 
     local executable=src/app/tor
@@ -250,6 +258,8 @@ get_libevent
 get_openssl
 get_zlib
 get_tor
+
+patch_tor
 
 # Build dependencies
 build_libevent
