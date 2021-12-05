@@ -5,31 +5,33 @@ COMPILE_MINGW=${COMPILE_MINGW:-false}
 HOST=x86_64-w64-mingw32
 MINGW=mingw64
 
-DIST="${DIST:-/dist}"
-DIST_TARGET="${DIST_TARGET:-/target}"
+BADCAT_REPO="${BADCAT_REPO:./}"
+
+DIST="${DIST:-dist}"
+DIST_TARGET="${DIST_TARGET:-target}"
 
 get_libevent() (
-    wget https://github.com/libevent/libevent/releases/download/release-2.1.12-stable/libevent-2.1.12-stable.tar.gz
+    wget -q https://github.com/libevent/libevent/releases/download/release-2.1.12-stable/libevent-2.1.12-stable.tar.gz
     tar -xf libevent-2.1.12-stable.tar.gz
 )
 
 get_openssl() (
-    wget https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_1_1_1l.tar.gz
+    wget -q https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_1_1_1l.tar.gz
     tar -xf OpenSSL_1_1_1l.tar.gz
 )
 
 get_zlib() (
-    wget https://github.com/madler/zlib/archive/refs/tags/v1.2.11.tar.gz
+    wget -q https://github.com/madler/zlib/archive/refs/tags/v1.2.11.tar.gz
     tar -xf v1.2.11.tar.gz
 )
 
 get_tor() (
-    wget https://github.com/torproject/tor/archive/refs/tags/tor-0.4.6.8.tar.gz
+    wget -q https://github.com/torproject/tor/archive/refs/tags/tor-0.4.6.8.tar.gz
     tar -xf tor-0.4.6.8.tar.gz
 )
 
 patch_tor() (
-    patch -s -t -p0 < rust_hs.patch
+    patch -s -t -p0 < "$BADCAT_REPO"/rust_hs.patch
 )
 
 build_libevent() (
@@ -82,7 +84,7 @@ build_zlib() (
 
     pushd zlib-1.2.11
 
-    ./configure --prefix="$DIST" --static
+    CFLAGS=-fPIC ./configure --prefix="$DIST" --static
     make
     make install
 
@@ -106,7 +108,8 @@ build_tor() (
         --with-zlib-dir="$DIST" \
         --enable-static-libevent \
         --enable-static-openssl \
-        --enable-static-zlib
+        --enable-static-zlib \
+        --enable-pic
     )
 
     if $COMPILE_MINGW; then
@@ -119,19 +122,12 @@ build_tor() (
     ./autogen.sh
     ./configure ${args[@]}
 
-    # disable linking to executable
+    # We only want the static libraries, so
+    # disable linking to a executable because it
+    # would fail anyway.
     sed -i 's/^CCLD \= \$(CC)/CCLD = true/' Makefile
 
     make -j4
-
-    local executable=src/app/tor
-
-    if $COMPILE_MINGW; then
-        executable+=".exe"
-    fi
-
-    # copy executable to host
-    cp "$executable" "$DIST_TARGET"
     popd
 )
 

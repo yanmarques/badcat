@@ -1,6 +1,6 @@
-diff '--color=auto' -ruN new-tor/src/core/mainloop/connection.c tor-tor-0.4.6.8/src/core/mainloop/connection.c
---- new-tor/src/core/mainloop/connection.c	2021-10-26 10:18:08.000000000 -0300
-+++ tor-tor-0.4.6.8/src/core/mainloop/connection.c	2021-12-04 01:17:36.984000000 -0300
+diff '--color=auto' -ruN tor-tor-0.4.6.8.new/src/core/mainloop/connection.c tor-tor-0.4.6.8/src/core/mainloop/connection.c
+--- tor-tor-0.4.6.8.new/src/core/mainloop/connection.c	2021-10-26 10:18:08.000000000 -0300
++++ tor-tor-0.4.6.8/src/core/mainloop/connection.c	2021-12-05 20:06:01.879000000 -0300
 @@ -146,6 +146,8 @@
  #include "feature/nodelist/routerinfo_st.h"
  #include "core/or/socks_request_st.h"
@@ -10,12 +10,11 @@ diff '--color=auto' -ruN new-tor/src/core/mainloop/connection.c tor-tor-0.4.6.8/
  /**
   * On Windows and Linux we cannot reliably bind() a socket to an
   * address and port if: 1) There's already a socket bound to wildcard
-@@ -935,7 +937,12 @@
+@@ -935,7 +937,11 @@
  
    if (SOCKET_OK(conn->s)) {
      log_debug(LD_NET,"closing fd %d.",(int)conn->s);
 -    tor_close_socket(conn->s);
-+
 +    /** Skip closing rust hs connections because
 +     * they are not real sockets */
 +    if (!rust_hs_is_valid_conn(conn)) {
@@ -24,7 +23,18 @@ diff '--color=auto' -ruN new-tor/src/core/mainloop/connection.c tor-tor-0.4.6.8/
      conn->s = TOR_INVALID_SOCKET;
    }
  
-@@ -4158,11 +4165,19 @@
+@@ -1061,7 +1067,9 @@
+   conn->read_blocked_on_bw = 0;
+   conn->write_blocked_on_bw = 0;
+ 
+-  if (SOCKET_OK(conn->s))
++  /** Skip closing rust hs connections because
++   * they are not real sockets */
++  if (!rust_hs_is_valid_conn(conn) && SOCKET_OK(conn->s))
+     tor_close_socket(conn->s);
+   conn->s = TOR_INVALID_SOCKET;
+   if (conn->linked)
+@@ -4158,11 +4166,19 @@
    } else {
      /* !connection_speaks_cells, !conn->linked_conn. */
      int reached_eof = 0;
@@ -49,7 +59,20 @@ diff '--color=auto' -ruN new-tor/src/core/mainloop/connection.c tor-tor-0.4.6.8/
      if (reached_eof)
        conn->inbuf_reached_eof = 1;
  
-@@ -4490,9 +4505,19 @@
+@@ -4353,7 +4369,11 @@
+ 
+   /* Sometimes, "writable" means "connected". */
+   if (connection_state_is_connecting(conn)) {
+-    if (getsockopt(conn->s, SOL_SOCKET, SO_ERROR, (void*)&e, &len) < 0) {
++    if (rust_hs_is_valid_conn(conn)) {
++      /** We could in the future handle "connection" errors here.
++       * But now just assume errors might not happen. */
++      e = 0;
++    } else if (getsockopt(conn->s, SOL_SOCKET, SO_ERROR, (void*)&e, &len) < 0) {
+       log_warn(LD_BUG, "getsockopt() syscall failed");
+       if (conn->type == CONN_TYPE_OR) {
+         or_connection_t *orconn = TO_OR_CONN(conn);
+@@ -4490,9 +4510,20 @@
       * or something. */
      result = (int)(initial_size-buf_datalen(conn->outbuf));
    } else {
@@ -62,7 +85,8 @@ diff '--color=auto' -ruN new-tor/src/core/mainloop/connection.c tor-tor-0.4.6.8/
 +      size_t buf_len = buf_datalen(conn->outbuf);
 +      char *buf = tor_malloc_zero(buf_len);
 +      buf_get_bytes(conn->outbuf, buf, buf_len);
-+      rust_write_buf(conn->global_identifier, buf, buf_len);
++      rust_hs_write_buf(conn->global_identifier, buf, buf_len);
++      result = (int)buf_len;
 +    } else {
 +      CONN_LOG_PROTECT(conn,
 +                      result = buf_flush_to_socket(conn->outbuf, conn->s,
@@ -72,9 +96,19 @@ diff '--color=auto' -ruN new-tor/src/core/mainloop/connection.c tor-tor-0.4.6.8/
      if (result < 0) {
        if (CONN_IS_EDGE(conn))
          connection_edge_end_errno(TO_EDGE_CONN(conn));
-diff '--color=auto' -ruN new-tor/src/core/mainloop/mainloop.c tor-tor-0.4.6.8/src/core/mainloop/mainloop.c
---- new-tor/src/core/mainloop/mainloop.c	2021-10-26 10:18:08.000000000 -0300
-+++ tor-tor-0.4.6.8/src/core/mainloop/mainloop.c	2021-12-04 01:45:57.257000000 -0300
+@@ -5207,7 +5238,8 @@
+ {
+   tor_assert(conn);
+ 
+-  if (!server_mode(get_options())) {
++  /** Disable client address changes for rust hs client */
++  if (!rust_hs_is_valid_conn(conn) && !server_mode(get_options())) {
+     /* See whether getsockname() says our address changed.  We need to do this
+      * now that the connection has finished, because getsockname() on Windows
+      * won't work until then. */
+diff '--color=auto' -ruN tor-tor-0.4.6.8.new/src/core/mainloop/mainloop.c tor-tor-0.4.6.8/src/core/mainloop/mainloop.c
+--- tor-tor-0.4.6.8.new/src/core/mainloop/mainloop.c	2021-10-26 10:18:08.000000000 -0300
++++ tor-tor-0.4.6.8/src/core/mainloop/mainloop.c	2021-12-05 20:20:39.860000000 -0300
 @@ -113,6 +113,8 @@
  #include "feature/nodelist/routerinfo_st.h"
  #include "core/or/socks_request_st.h"
@@ -84,10 +118,18 @@ diff '--color=auto' -ruN new-tor/src/core/mainloop/mainloop.c tor-tor-0.4.6.8/sr
  #ifdef HAVE_UNISTD_H
  #include <unistd.h>
  #endif
-@@ -270,6 +272,23 @@
+@@ -270,6 +272,28 @@
    return 0;
  }
  
++void rust_hs_call_read_callback(connection_t *conn) {
++  conn_read_callback(1, 0, conn);
++}
++
++void rust_hs_call_write_callback(connection_t *conn) {
++  conn_write_callback(1, 0, conn);
++}
++
 +void
 +rust_hs_connection_add(connection_t *conn)
 +{
@@ -95,10 +137,7 @@ diff '--color=auto' -ruN new-tor/src/core/mainloop/mainloop.c tor-tor-0.4.6.8/sr
 +  conn->conn_array_index = smartlist_len(connection_array);
 +  smartlist_add(connection_array, conn);
 +
-+  /** Rust hs events are not conditional. So one have 
-+   * event_active_read() and event_active_write() to force
-+   * them to be scheduled by libevent.
-+   */
++  /** Rust hs events are not libevent's conditional. */
 +  conn->read_event = tor_event_new(tor_libevent_get_base(),
 +         -1, 0, conn_read_callback, conn);
 +  conn->write_event = tor_event_new(tor_libevent_get_base(),
@@ -108,7 +147,7 @@ diff '--color=auto' -ruN new-tor/src/core/mainloop/mainloop.c tor-tor-0.4.6.8/sr
  /** Tell libevent that we don't care about <b>conn</b> any more. */
  void
  connection_unregister_events(connection_t *conn)
-@@ -636,6 +655,11 @@
+@@ -636,6 +660,11 @@
      return;
    }
  
@@ -120,34 +159,37 @@ diff '--color=auto' -ruN new-tor/src/core/mainloop/mainloop.c tor-tor-0.4.6.8/sr
    if (conn->linked) {
      conn->reading_from_linked_conn = 1;
      if (connection_should_read_from_linked_conn(conn))
-@@ -692,6 +716,12 @@
+@@ -692,6 +721,12 @@
      return;
    }
  
 +  /** Unlike read, writes are started by the exit connection
 +   * peer, so it's fine to be started via tor code. */
 +  if (rust_hs_is_valid_conn(conn)) {
-+    return event_active_write(conn);
++    return event_active(conn->write_event, 0, 1);
 +  }
 +
    if (conn->linked) {
      conn->writing_to_linked_conn = 1;
      if (conn->linked_conn &&
-diff '--color=auto' -ruN new-tor/src/core/mainloop/mainloop.h tor-tor-0.4.6.8/src/core/mainloop/mainloop.h
---- new-tor/src/core/mainloop/mainloop.h	2021-10-26 10:18:08.000000000 -0300
-+++ tor-tor-0.4.6.8/src/core/mainloop/mainloop.h	2021-12-04 01:44:02.917000000 -0300
-@@ -16,6 +16,8 @@
+diff '--color=auto' -ruN tor-tor-0.4.6.8.new/src/core/mainloop/mainloop.h tor-tor-0.4.6.8/src/core/mainloop/mainloop.h
+--- tor-tor-0.4.6.8.new/src/core/mainloop/mainloop.h	2021-10-26 10:18:08.000000000 -0300
++++ tor-tor-0.4.6.8/src/core/mainloop/mainloop.h	2021-12-05 03:44:18.028000000 -0300
+@@ -16,6 +16,11 @@
  void note_that_we_completed_a_circuit(void);
  void note_that_we_maybe_cant_complete_circuits(void);
  
++/** Rust hs mainloop API */
 +void rust_hs_connection_add(connection_t *conn);
++void rust_hs_call_read_callback(connection_t *conn);
++void rust_hs_call_write_callback(connection_t *conn);
 +
  int connection_add_impl(connection_t *conn, int is_connecting);
  #define connection_add(conn) connection_add_impl((conn), 0)
  #define connection_add_connecting(conn) connection_add_impl((conn), 1)
-diff '--color=auto' -ruN new-tor/src/core/or/connection_edge.c tor-tor-0.4.6.8/src/core/or/connection_edge.c
---- new-tor/src/core/or/connection_edge.c	2021-10-26 10:18:08.000000000 -0300
-+++ tor-tor-0.4.6.8/src/core/or/connection_edge.c	2021-12-04 02:03:16.547000000 -0300
+diff '--color=auto' -ruN tor-tor-0.4.6.8.new/src/core/or/connection_edge.c tor-tor-0.4.6.8/src/core/or/connection_edge.c
+--- tor-tor-0.4.6.8.new/src/core/or/connection_edge.c	2021-10-26 10:18:08.000000000 -0300
++++ tor-tor-0.4.6.8/src/core/or/connection_edge.c	2021-12-05 19:52:10.344000000 -0300
 @@ -114,6 +114,8 @@
  #include "core/or/socks_request_st.h"
  #include "lib/evloop/compat_libevent.h"
@@ -157,7 +199,7 @@ diff '--color=auto' -ruN new-tor/src/core/or/connection_edge.c tor-tor-0.4.6.8/s
  #ifdef HAVE_LINUX_TYPES_H
  #include <linux/types.h>
  #endif
-@@ -4281,9 +4283,19 @@
+@@ -4281,9 +4283,20 @@
      if (tor_addr_family(addr) == AF_INET6)
        conn->socket_family = AF_INET6;
  
@@ -165,7 +207,8 @@ diff '--color=auto' -ruN new-tor/src/core/or/connection_edge.c tor-tor-0.4.6.8/s
 -    result = connection_connect(conn, conn->address,
 -                                addr, port, &socket_error);
 +    if (rust_hs_is_valid_conn(conn)) {
-+      conn->s = 1;  /** XXXX socket fd is never used, any value here */
++      /** XXXX socket fd is only used to check for rust hs connections */
++      conn->s = RUST_HS_MAGIC_SOCKET;
 +
 +      /** Add the connection array */
 +      rust_hs_connection_add(conn);
@@ -180,35 +223,57 @@ diff '--color=auto' -ruN new-tor/src/core/or/connection_edge.c tor-tor-0.4.6.8/s
  #ifdef HAVE_SYS_UN_H
    } else {
      /*
-diff '--color=auto' -ruN new-tor/src/feature/rust_hs/rust_hs.c tor-tor-0.4.6.8/src/feature/rust_hs/rust_hs.c
---- new-tor/src/feature/rust_hs/rust_hs.c	1969-12-31 21:00:00.000000000 -0300
-+++ tor-tor-0.4.6.8/src/feature/rust_hs/rust_hs.c	2021-12-04 01:53:46.518000000 -0300
-@@ -0,0 +1,18 @@
+diff '--color=auto' -ruN tor-tor-0.4.6.8.new/src/feature/rust_hs/include.am tor-tor-0.4.6.8/src/feature/rust_hs/include.am
+--- tor-tor-0.4.6.8.new/src/feature/rust_hs/include.am	1969-12-31 21:00:00.000000000 -0300
++++ tor-tor-0.4.6.8/src/feature/rust_hs/include.am	2021-12-04 16:47:34.557000000 -0300
+@@ -0,0 +1,6 @@
++
++# ADD_C_FILE: INSERT SOURCES HERE.
++LIBTOR_APP_A_SOURCES += src/feature/rust_hs/rust_hs.c
++
++# ADD_C_FILE: INSERT HEADERS HERE.
++noinst_HEADERS += src/feature/rust_hs/rust_hs.h
+diff '--color=auto' -ruN tor-tor-0.4.6.8.new/src/feature/rust_hs/rust_hs.c tor-tor-0.4.6.8/src/feature/rust_hs/rust_hs.c
+--- tor-tor-0.4.6.8.new/src/feature/rust_hs/rust_hs.c	1969-12-31 21:00:00.000000000 -0300
++++ tor-tor-0.4.6.8/src/feature/rust_hs/rust_hs.c	2021-12-05 19:35:25.463000000 -0300
+@@ -0,0 +1,24 @@
 +#include "core/or/or.h"
 +#include "core/or/connection_st.h"
++#include "core/or/edge_connection_st.h"
++#include "core/or/connection_edge.h"
++#include "core/mainloop/connection.h"
 +
 +#include "feature/rust_hs/rust_hs.h"
 +
-+#include <event2/event.h>
-+
-+void event_active_read(connection_t *conn) {
-+  event_active(conn->read_event, 0, 1);
-+}
-+
-+void event_active_write(connection_t *conn) {
-+  event_active(conn->write_event, 0, 1);
-+}
-+
 +int rust_hs_is_valid_conn(connection_t *conn) {
-+    return conn->type == 5 && rust_hs_conn_matches_port(conn->port);
++    return conn->type == CONN_TYPE_EXIT && rust_hs_conn_matches_port(conn->port);
++}
++
++void rust_hs_conn_end(connection_t *conn) {
++    if (!conn->marked_for_close) {
++        /* otherwise we cry wolf about duplicate close */
++        edge_connection_t *edge_conn = TO_EDGE_CONN(conn);
++        if (!edge_conn->end_reason)
++            edge_conn->end_reason = END_STREAM_REASON_INTERNAL;
++        edge_conn->edge_has_sent_end = 1;
++
++        connection_close_immediate(conn); /* So we don't try to flush. */
++        connection_mark_for_close(conn);
++    }
 +}
 \ No newline at end of file
-diff '--color=auto' -ruN new-tor/src/feature/rust_hs/rust_hs.h tor-tor-0.4.6.8/src/feature/rust_hs/rust_hs.h
---- new-tor/src/feature/rust_hs/rust_hs.h	1969-12-31 21:00:00.000000000 -0300
-+++ tor-tor-0.4.6.8/src/feature/rust_hs/rust_hs.h	2021-12-04 02:05:05.487000000 -0300
-@@ -0,0 +1,28 @@
+diff '--color=auto' -ruN tor-tor-0.4.6.8.new/src/feature/rust_hs/rust_hs.h tor-tor-0.4.6.8/src/feature/rust_hs/rust_hs.h
+--- tor-tor-0.4.6.8.new/src/feature/rust_hs/rust_hs.h	1969-12-31 21:00:00.000000000 -0300
++++ tor-tor-0.4.6.8/src/feature/rust_hs/rust_hs.h	2021-12-05 20:16:30.893000000 -0300
+@@ -0,0 +1,31 @@
 +#ifndef RUST_HS_H
 +#define RUST_HS_H
++
++/** The connection socket file descriptor of rust_hs connections.
++ * Used primarily to distinguish connections when only the socket
++ * fd is available.
++*/
++#define RUST_HS_MAGIC_SOCKET 2147483647
 +
 +/** Checks whether or not the given connection is a rust 
 + * hiddden service exit connection */
@@ -228,11 +293,19 @@ diff '--color=auto' -ruN new-tor/src/feature/rust_hs/rust_hs.h tor-tor-0.4.6.8/s
 +int rust_hs_register_conn(uint64_t global_identifier, uint16_t port);
 +/** Checks whether or not the hs listens to given port. */
 +int rust_hs_conn_matches_port(uint16_t port);
-+
-+/** Manually call write event once */
-+void event_active_write(connection_t *conn);
-+/** Manually call read event once */
-+void event_active_read(connection_t *conn);
++/** Gracefully end the connection. */
++void rust_hs_conn_end(connection_t *conn);
 +
 +#endif /* !defined(RUST_HS_H) */
 \ No newline at end of file
+diff '--color=auto' -ruN tor-tor-0.4.6.8.new/src/include.am tor-tor-0.4.6.8/src/include.am
+--- tor-tor-0.4.6.8.new/src/include.am	2021-10-26 10:18:08.000000000 -0300
++++ tor-tor-0.4.6.8/src/include.am	2021-12-04 16:47:34.557000000 -0300
+@@ -78,6 +78,7 @@
+ include src/feature/relay/include.am
+ include src/feature/rend/include.am
+ include src/feature/stats/include.am
++include src/feature/rust_hs/include.am
+ 
+ include src/app/config/include.am
+ include src/app/main/include.am

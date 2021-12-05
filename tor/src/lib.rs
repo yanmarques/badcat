@@ -1,8 +1,38 @@
-use std::error::Error;
+pub mod stream;
+
+///! Public API for rust_hs Tor's feature.
+
+#[no_mangle]
+pub extern "C" fn rust_hs_write_buf(global_id: u64, buf: *const u8, buf_len: usize) {
+    stream::write_buf(global_id, buf, buf_len)
+}
+
+#[no_mangle]
+pub extern "C" fn rust_hs_conn_matches_port(port: u16) -> i32 {
+    stream::conn_matches_port(port)
+}
+
+#[no_mangle]
+pub extern "C" fn rust_hs_read_buf(global_id: u64) -> *const u8 {
+    stream::read_buf(global_id)
+}
+
+#[no_mangle]
+pub extern "C" fn rust_hs_register_conn(global_id: u64, port: u16) -> i32 {
+    stream::register_conn(global_id, port)
+}
+
 use std::ffi::{CStr, CString};
+use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
 use std::thread::{self, JoinHandle};
+
+const HS_SERVICE_ADDR_LEN_BASE32: usize = 56;
+const HS_SERVICE_VERSION: u8 = 3;
+const HS_SERVICE_KEY_TAG: &str = "type0";
+const ED25519_PUBKEY_LEN: usize = 32;
+const ED25519_SECKEY_LEN: usize = 64;
 
 extern "C" {
     fn tor_main(argc: usize, argv: *const *const i8);
@@ -24,12 +54,6 @@ extern "C" {
         tag: *const i8,
     ) -> isize;
 }
-
-const HS_SERVICE_ADDR_LEN_BASE32: usize = 56;
-const HS_SERVICE_VERSION: u8 = 3;
-const HS_SERVICE_KEY_TAG: &str = "type0";
-const ED25519_PUBKEY_LEN: usize = 32;
-const ED25519_SECKEY_LEN: usize = 64;
 
 pub struct Tor {
     inner: JoinHandle<()>,

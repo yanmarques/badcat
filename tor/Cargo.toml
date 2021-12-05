@@ -10,3 +10,4 @@ name = "tor"
 path = "src/lib.rs"
 
 [dependencies]
+once_cell = "1.8.0"
