@@ -5,29 +5,36 @@ COMPILE_MINGW=${COMPILE_MINGW:-false}
 HOST=x86_64-w64-mingw32
 MINGW=mingw64
 
-BADCAT_REPO="${BADCAT_REPO:./}"
+BADCAT_REPO="${BADCAT_REPO:-$(dirname $0)}"
 
 DIST="${DIST:-dist}"
 DIST_TARGET="${DIST_TARGET:-target}"
 
+download_extract() (
+    local url="$1"
+    local file=$(mktemp)
+
+    echo "[+] downloading: $url"
+    wget -q -O "$file" "$url"
+    tar -xf "$file"
+
+    rm "$file"
+)
+
 get_libevent() (
-    wget -q https://github.com/libevent/libevent/releases/download/release-2.1.12-stable/libevent-2.1.12-stable.tar.gz
-    tar -xf libevent-2.1.12-stable.tar.gz
+    download_extract https://github.com/libevent/libevent/releases/download/release-2.1.12-stable/libevent-2.1.12-stable.tar.gz
 )
 
 get_openssl() (
-    wget -q https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_1_1_1l.tar.gz
-    tar -xf OpenSSL_1_1_1l.tar.gz
+    download_extract https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_1_1_1l.tar.gz
 )
 
 get_zlib() (
-    wget -q https://github.com/madler/zlib/archive/refs/tags/v1.2.11.tar.gz
-    tar -xf v1.2.11.tar.gz
+    download_extract https://github.com/madler/zlib/archive/refs/tags/v1.2.11.tar.gz
 )
 
 get_tor() (
-    wget -q https://github.com/torproject/tor/archive/refs/tags/tor-0.4.6.8.tar.gz
-    tar -xf tor-0.4.6.8.tar.gz
+    download_extract https://github.com/torproject/tor/archive/refs/tags/tor-0.4.6.8.tar.gz
 )
 
 patch_tor() (
@@ -35,6 +42,10 @@ patch_tor() (
 )
 
 build_libevent() (
+    if [ ! -d "libevent-2.1.12-stable" ]; then
+        get_libevent
+    fi
+
     local args=(
         --prefix="$DIST" \
         --disable-shared \
@@ -62,6 +73,10 @@ build_openssl() (
     local args=( --prefix="$DIST" no-shared no-dso no-zlib )
     local exe=./config
 
+    if [ ! -d "openssl-OpenSSL_1_1_1l" ]; then
+        get_openssl
+    fi
+
     if $COMPILE_MINGW; then
         exe=./Configure
         args+=( --cross-compile-prefix="$HOST"- "$MINGW" )
@@ -78,6 +93,10 @@ build_openssl() (
 )
 
 build_zlib() (
+    if [ ! -d "zlib-1.2.11" ]; then
+        get_zlib
+    fi
+
     if $COMPILE_MINGW; then
         export CC="$HOST"-gcc
     fi
@@ -92,6 +111,11 @@ build_zlib() (
 )
 
 build_tor() (
+    if [ ! -d "tor-tor-0.4.6.8" ]; then
+        get_tor
+        patch_tor
+    fi
+
     local args=(
         --disable-unittests \
         --disable-system-torrc \
@@ -248,14 +272,6 @@ bundle_tor_static_libs() (
 if [ ! -d "$DIST" ]; then
     mkdir "$DIST"
 fi
-
-# Download stuff
-get_libevent
-get_openssl
-get_zlib
-get_tor
-
-patch_tor
 
 # Build dependencies
 build_libevent

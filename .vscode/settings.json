@@ -1,6 +1,14 @@
 {
     "files.associations": {
         "connection.h": "c",
-        "limits.h": "c"
+        "limits.h": "c",
+        "*.inc": "c",
+        "compat_libevent.h": "c",
+        "origin_circuit_st.h": "c",
+        "smartlist_core.h": "c",
+        "mainloop.h": "c",
+        "or_connection_st.h": "c",
+        "connection_st.h": "c",
+        "port_cfg_st.h": "c"
     }
 }
