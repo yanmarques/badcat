@@ -33,10 +33,10 @@ _server_: _backdoor_ running Tor Onion Service on the _victim_.
         - [Compile the attacker toolkit once](#1-compile-the-attacker-toolkit-once)
         - [Install Windows cross-compilation toolchain](#2-install-windows-cross-compilation-toolchain)
         - [Build the _backdoor_ for Windows](#3-build-the-backdoor-for-windows)
-        - [Delivery and Control](#3-delivery-and-control)
+        - [Delivery and Control](#4-delivery-and-control)
     - [Advanced Usage](#advanced-usage)
         - [Connect through a custom shell](#1-connect-through-a-custom-shell)
-        - [Connect through meterpreter](#1-connect-through-meterpreter)
+        - [Connect through meterpreter](#2-connect-through-meterpreter)
 
 # Alternatives
 
