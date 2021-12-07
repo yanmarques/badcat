@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::{collections::HashMap, sync::Mutex};
-use std::{slice, thread, time};
+use std::{io, slice, thread, time};
 
 use once_cell::sync::Lazy;
 
@@ -91,74 +91,11 @@ impl Connection {
         !self.closed
     }
 
-    pub fn from_listener(global_identifier: u64) -> Self {
+    pub fn clone(&self) -> Self {
         Connection {
-            id: global_identifier,
-            closed: false,
+            id: self.id,
+            closed: self.closed,
         }
-    }
-
-    pub fn read(&mut self, buf: &mut Vec<u8>) -> bool {
-        if self.closed {
-            return false;
-        }
-
-        let sleep = time::Duration::from_millis(200);
-
-        loop {
-            if let Some(conn) = self.get_tor_connection_or_close() {
-                unsafe { rust_hs_call_write_callback(conn) };
-
-                let mut buffers = CONN_BUFFERS.lock().unwrap_or_else(|_| {
-                    panic!("problem accessing global connection buffers");
-                });
-
-                if let Some(buffer) = buffers.get_mut(&self.id) {
-                    if buffer.outbuf.len() > 0 {
-                        buf.extend(&buffer.outbuf);
-                        buffer.outbuf.clear();
-                        return true;
-                    }
-                }
-            } else {
-                return false;
-            }
-
-            thread::sleep(sleep);
-        }
-    }
-
-    pub fn write(&mut self, buf: &[u8]) -> bool {
-        if self.closed {
-            return false;
-        }
-
-        if let Some(conn) = self.get_tor_connection_or_close() {
-            {
-                let mut buffers = CONN_BUFFERS.lock().unwrap_or_else(|_| {
-                    panic!("problem accessing global connection buffers");
-                });
-
-                if let Some(buffer) = buffers.get_mut(&self.id) {
-                    buffer.inbuf.extend(buf);
-                }
-            }
-
-            unsafe { rust_hs_call_read_callback(conn) };
-
-            let mut buffers = CONN_BUFFERS.lock().unwrap_or_else(|_| {
-                panic!("problem accessing global connection buffers");
-            });
-
-            if let Some(buffer) = buffers.get_mut(&self.id) {
-                let buflen = buffer.inbuf.len();
-                buffer.inbuf.clear();
-
-                return buflen == 0;
-            }
-        }
-
-        false
     }
 
     pub fn close(&mut self) {
@@ -184,7 +121,104 @@ impl Drop for Connection {
         self.close();
     }
 }
- 
+
+impl io::Read for Connection {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
+        if self.closed {
+            return Err(io::Error::from(io::ErrorKind::NotConnected));
+        }
+
+        let sleep = time::Duration::from_millis(200);
+
+        loop {
+            if let Some(conn) = self.get_tor_connection_or_close() {
+                unsafe { rust_hs_call_write_callback(conn) };
+
+                let mut buffers = CONN_BUFFERS.lock().unwrap_or_else(|_| {
+                    panic!("problem accessing global connection buffers");
+                });
+
+                if let Some(buffer) = buffers.get_mut(&self.id) {
+                    let outbuf_len = buffer.outbuf.len();
+                    if outbuf_len > 0 {
+                        let buf_len = buf.len();
+
+                        let bytes_read = if outbuf_len < buf_len {
+                            // Received LESS bytes than available buf
+
+                            // Append to buf all received bytes
+                            for (index, byte) in buffer.outbuf.iter().enumerate() {
+                                buf[index] = *byte;
+                            }
+
+                            buffer.outbuf.clear();
+
+                            outbuf_len
+                        } else {
+                            // Received MORE bytes than available buf
+
+                            // Copy to buf a buffer with the same size
+                            let eq_buf = &buffer.outbuf.clone()[..buf_len];
+                            buf.copy_from_slice(eq_buf);
+
+                            // Mark some outbuf data to be removed
+                            buffer.outbuf.drain(..buf_len);
+
+                            buf_len
+                        };
+
+                        return Ok(bytes_read);
+                    }
+                }
+            } else {
+                return Err(io::Error::from(io::ErrorKind::BrokenPipe));
+            }
+
+            thread::sleep(sleep);
+        }
+    }
+}
+
+impl io::Write for Connection {
+    fn write(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
+        if self.closed {
+            return Err(io::Error::from(io::ErrorKind::NotConnected));
+        }
+
+        if let Some(conn) = self.get_tor_connection_or_close() {
+            {
+                let mut buffers = CONN_BUFFERS.lock().unwrap_or_else(|_| {
+                    panic!("problem accessing global connection buffers");
+                });
+
+                if let Some(buffer) = buffers.get_mut(&self.id) {
+                    buffer.inbuf.extend(buf);
+                }
+            }
+
+            unsafe { rust_hs_call_read_callback(conn) };
+
+            let mut buffers = CONN_BUFFERS.lock().unwrap_or_else(|_| {
+                panic!("problem accessing global connection buffers");
+            });
+
+            if let Some(buffer) = buffers.get_mut(&self.id) {
+                let buflen = buffer.inbuf.len();
+                buffer.inbuf.clear();
+
+                return Ok(buflen);
+            }
+        }
+
+        Err(io::Error::from(io::ErrorKind::BrokenPipe))
+    }
+
+    fn flush(&mut self) -> Result<(), io::Error> {
+        //
+        Ok(())
+    }
+}
+
 pub fn listen_connections(port: u16, listener: fn(&mut Connection)) -> Result<(), Box<dyn Error>> {
     let mut servers = SERVERS.lock().unwrap_or_else(|_| {
         panic!("problem accessing global servers");

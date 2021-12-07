@@ -304,6 +304,7 @@ dependencies = [
 name = "test-tor"
 version = "0.1.0"
 dependencies = [
+ "badcat",
  "tor",
 ]
 

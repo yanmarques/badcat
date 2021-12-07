@@ -22,8 +22,8 @@ pub extern "C" fn rust_hs_register_conn(global_id: u64, port: u16) -> i32 {
     stream::register_conn(global_id, port)
 }
 
-use std::ffi::{CStr, CString};
 use std::error::Error;
+use std::ffi::{CStr, CString};
 use std::fs;
 use std::path::PathBuf;
 use std::thread::{self, JoinHandle};

