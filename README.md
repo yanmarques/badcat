@@ -23,6 +23,21 @@ _server_: _backdoor_ running Tor Onion Service on the _victim_.
 5. XOR encryption of every sensible thing.
 6. Full [rust](https://www.rust-lang.org/) source code.
 
+# Table of Contents
+
+- [Alternatives](#alternatives)
+    - [ToRat](#torat)
+- [Getting Started](#getting-started)
+    - [Install Rust](#install-rust)
+    - [Simple Quick Usage](#simple-quick-usage)
+        - [Compile the attacker toolkit once](#1-compile-the-attacker-toolkit-once)
+        - [Install Windows cross-compilation toolchain](#2-install-windows-cross-compilation-toolchain)
+        - [Build the _backdoor_ for Windows](#3-build-the-backdoor-for-windows)
+        - [Delivery and Control](#3-delivery-and-control)
+    - [Advanced Usage](#advanced-usage)
+        - [Connect through a custom shell](#1-connect-through-a-custom-shell)
+        - [Connect through meterpreter](#1-connect-through-meterpreter)
+
 # Alternatives
 
 So far I have only found [ToRat](https://github.com/lu4p/ToRat) as a good alternative.
@@ -217,7 +232,7 @@ When connecting, the attacker toolkit will execute the payload for you, but acco
 Figure 3 - Attacker toolkit message about the payload
 ![Attacker toolkit message about the payload](https://user-images.githubusercontent.com/28604565/144483939-e72bc74c-5e0f-481c-b14c-b639bde7de2a.png)
 
-### 2. Connect through a meterpreter session
+### 2. Connect through meterpreter
 
 Using Meterpreter gives you a full-featured remote administration, but it's well known and blocked by most anti-viruses. With badcat, you evade - as far as I can tell - almost all anti-virus detection because you only decrypt and execute the payload after the _attacker_ connects.
 
