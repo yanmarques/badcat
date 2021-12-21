@@ -103,10 +103,50 @@ impl Tor {
         let torrc = String::from(torrc.to_str().unwrap());
 
         let inner = thread::spawn(move || {
-            init_from_rc(&torrc);
+            let argv1 = CString::new("tor").unwrap();
+            let argv2 = CString::new("-f").unwrap();
+            let argv3 = CString::new(torrc).unwrap();
+
+            let argv = vec![argv1.as_ptr(), argv2.as_ptr(), argv3.as_ptr()];
+
+            unsafe {
+                tor_main(argv.len(), argv.as_ptr());
+            }
         });
 
         Tor { inner }
+    }
+
+    pub fn from_args(args: Vec<&str>) -> Self {
+        let c_args = args.iter().map(|a| CString::new(*a).unwrap()).collect::<Vec<CString>>();
+
+        let inner = thread::spawn(move || {
+            let argv1 = CString::new("tor").unwrap();
+
+            let mut argv = vec![argv1.as_ptr()];
+            for argument in c_args {
+                argv.push(argument.as_ptr());
+            }
+
+            unsafe {
+                tor_main(argv.len(), argv.as_ptr());
+            }
+        });
+
+        Tor { inner }
+    }
+
+    pub fn without_thread() {
+        let argv1 = CString::new("tor").unwrap();
+        let argv2 = CString::new("-f").unwrap();
+        let argv3 = CString::new("torrc").unwrap();
+
+        let argv = vec![argv1.as_ptr(), argv2.as_ptr(), argv3.as_ptr()];
+
+        unsafe {
+            tor_main(argv.len(), argv.as_ptr());
+            shutdown_with_code(0);
+        };
     }
 
     /// Stop Tor gracefully and wait for the Thread to exit.
