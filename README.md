@@ -15,13 +15,15 @@ _server_: _backdoor_ running Tor Onion Service on the _victim_.
 
 # Features
 
-1. Embeded Tor executable inside the _backdoor_. No need to create a new process for the Tor binary.
-2. Automatic Onion Service configuration using a configurable torrc template.
-3. Authentication to access the _server_.
-4. Optional use of payload (aka shellcode) in the _backdoor_, which is only executed once the attacker connects evading any AV real time monitoring. When not using a payload, fallback to badcat's basic shell.
-5. Execution of payload can be re-started many times from the attacker.
-5. XOR encryption of every sensible thing.
-6. Full [rust](https://www.rust-lang.org/) source code.
+1. Tor is static linked against the _backdoor_. The need to create a new process for the Tor binary goes away.
+2. An in-house implementation to stablish Onion Service connections directly from the _backdoor_ code. In other words, the need for a TCP server goes way with the in-memory server feature.
+3. This powerful in-memory server feature, allows one to develop a custom RPC Api with badcat orchestration without the need to open a socket. This may be extremely helpful for stealthy Command and Control engagements.
+4. Automatic Onion Service configuration using a configurable torrc template.
+5. Authentication to access the _server_.
+6. Optional use of payload (aka shellcode) in the _backdoor_, which is only executed once the attacker connects evading almost any Anti-Virus real time monitoring. When not using a payload, fallback to a basic shell.
+7. Execution of payload can be re-started many times from the attacker.
+8. XOR encryption of every sensible thing.
+9. Full [rust](https://www.rust-lang.org/) source code.
 
 # Table of Contents
 
@@ -44,11 +46,11 @@ So far I have only found [ToRat](https://github.com/lu4p/ToRat) as a good altern
 
 ## ToRat
 
-ToRat is a Remote Administration tool using Tor as a transport mechanism and RPC for communication. There are conceptual differences between badcat and ToRat. The former focuses at creating an environment for shipping an anonymous backdoor with user adaptable payload. On the other hand, ToRat tries to be an All-In-One solution, featuring among other things, util commands via RPC, cross-platform and multi-user persistence, code obfuscation.
+I consider badcat to be a somewhat advanced alternative to ToRat. ToRat is a reasonably good Remote Administration tool using Tor as a transport mechanism and RPC for communication. There seems to have different goals between badcat and ToRat. The former focuses at creating an environment for shipping an anonymous and stealthy backdoor with user adaptable payload. On the other hand, ToRat tries to be an all-in-one solution, featuring among other things, util commands via RPC, cross-platform and multi-user persistence, code obfuscation.
 
-The big advantage of badcat compared to ToRat is the way it uses the Onion Service. Differently than ToRat, the server starts in the client and the attacker connects to the server, using the bind tcp approach. In the situation you are behind a Tor proxy and can't change Tor's configuration, this approach can be benefitial.
+Differently than ToRat, the server starts in the client and the attacker connects to the server, using the bind tcp approach. In the situation you are behind a Tor proxy and can't change Tor's configuration, this approach can be benefitial. Actually, I think most of the time, attackers does not use Tor alone because of well known attacks against stand-alone Tor instances. Generally Tails or Whonix inside a Virtual Machine or from a Live USB. In this more real world scenarios is convenient not to have to run Tor alone but just connect to it as a client, using a configuration file that is easy to move back and forth.
 
-Also badcat support arbitrary payload execution in order to allow quick generation of full-featured backdoors shipping a Meterpreter shellcode, for example.
+Also badcat supports arbitrary payload execution in order to allow quick generation of full-featured backdoors shipping a Meterpreter shellcode, for example.
 
 # Getting Started
 
@@ -280,5 +282,4 @@ With `msfconsole` opened, configure a handler for your payload and exploit it.
 
 Figure 5 - Meterpreter session opened through badcat
 ![Meterpreter session opened through badcat](https://user-images.githubusercontent.com/28604565/144487158-6ef721e7-2d2b-498c-a6c0-038434872182.png)
-
 
