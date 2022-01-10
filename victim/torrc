@@ -2,3 +2,4 @@ SOCKSPort 0
 DataDirectory @{DATA_DIR}
 HiddenServiceDir @{DATA_DIR}
 HiddenServicePort 80
+HiddenServicePort 8000
