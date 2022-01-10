@@ -28,6 +28,8 @@ use std::fs;
 use std::path::PathBuf;
 use std::thread::{self, JoinHandle};
 
+use badcat_lib::cmem;
+
 const HS_SERVICE_ADDR_LEN_BASE32: usize = 56;
 const HS_SERVICE_VERSION: u8 = 3;
 const HS_SERVICE_KEY_TAG: &str = "type0";
@@ -35,7 +37,7 @@ const ED25519_PUBKEY_LEN: usize = 32;
 const ED25519_SECKEY_LEN: usize = 64;
 
 extern "C" {
-    fn tor_main(argc: usize, argv: *const *const i8);
+    fn tor_main(argc: usize, argv: *mut u8);
     fn tor_shutdown_event_loop_and_exit(exit_code: usize);
 
     fn ed25519_keypair_generate(keypair_out: *mut u8, extra_strong: isize) -> isize;
@@ -69,24 +71,14 @@ pub struct HiddenService {
     pub keypair: Ed25519Keypair,
 }
 
-fn copy_buf(dst: &mut [u8], src: &[u8]) {
-    let mut index = 0;
-
-    for value in src {
-        dst[index] = *value;
-        index += 1;
-    }
-}
-
-fn init_from_rc(torrc: &str) {
-    let argv1 = CString::new("tor").unwrap();
-    let argv2 = CString::new("-f").unwrap();
-    let argv3 = CString::new(torrc).unwrap();
-
-    let argv = vec![argv1.as_ptr(), argv2.as_ptr(), argv3.as_ptr()];
+fn start_with_args(args: Vec<&str>) {
+    let args_len = args.len();
+    let c_args = args.iter().map(|a| CString::new(*a).unwrap()).collect::<Vec<CString>>();
+    let c_ptrs = c_args.iter().map(|c| c.as_ptr() as usize).collect::<Vec<usize>>();
 
     unsafe {
-        tor_main(argv.len(), argv.as_ptr());
+        let argv_ptr = cmem::c_array::<usize>(c_ptrs);
+        tor_main(args_len, argv_ptr);
     }
 }
 
@@ -103,50 +95,23 @@ impl Tor {
         let torrc = String::from(torrc.to_str().unwrap());
 
         let inner = thread::spawn(move || {
-            let argv1 = CString::new("tor").unwrap();
-            let argv2 = CString::new("-f").unwrap();
-            let argv3 = CString::new(torrc).unwrap();
-
-            let argv = vec![argv1.as_ptr(), argv2.as_ptr(), argv3.as_ptr()];
-
-            unsafe {
-                tor_main(argv.len(), argv.as_ptr());
-            }
+            start_with_args(vec!["-f", torrc.as_str()]);
         });
 
         Tor { inner }
     }
 
-    pub fn from_args(args: Vec<&str>) -> Self {
-        let c_args = args.iter().map(|a| CString::new(*a).unwrap()).collect::<Vec<CString>>();
-
+    pub fn from_args(args: Vec<&'static str>) -> Self {
         let inner = thread::spawn(move || {
-            let argv1 = CString::new("tor").unwrap();
-
-            let mut argv = vec![argv1.as_ptr()];
-            for argument in c_args {
-                argv.push(argument.as_ptr());
-            }
-
-            unsafe {
-                tor_main(argv.len(), argv.as_ptr());
-            }
+            start_with_args(args);
         });
 
         Tor { inner }
     }
 
-    pub fn without_thread() {
-        let argv1 = CString::new("tor").unwrap();
-        let argv2 = CString::new("-f").unwrap();
-        let argv3 = CString::new("torrc").unwrap();
-
-        let argv = vec![argv1.as_ptr(), argv2.as_ptr(), argv3.as_ptr()];
-
-        unsafe {
-            tor_main(argv.len(), argv.as_ptr());
-            shutdown_with_code(0);
-        };
+    pub fn threadless(args: Vec<&'static str>) {
+        start_with_args(args);
+        shutdown_with_code(0);
     }
 
     /// Stop Tor gracefully and wait for the Thread to exit.
@@ -228,10 +193,10 @@ impl Ed25519Keypair {
         };
 
         let mut pubkey = [0; ED25519_PUBKEY_LEN];
-        copy_buf(&mut pubkey, &buf[0..ED25519_PUBKEY_LEN]);
+        cmem::copy_buf::<u8>(&mut pubkey, &buf[0..ED25519_PUBKEY_LEN]);
 
         let mut seckey = [0; ED25519_SECKEY_LEN];
-        copy_buf(&mut seckey, &buf[ED25519_PUBKEY_LEN..ED25519_SECKEY_LEN]);
+        cmem::copy_buf::<u8>(&mut seckey, &buf[ED25519_PUBKEY_LEN..ED25519_SECKEY_LEN]);
 
         let kp = Ed25519Keypair { pubkey, seckey };
 
