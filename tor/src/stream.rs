@@ -168,12 +168,10 @@ impl Connection {
 
         let has_timeout = timeout.is_some();
         let now = time::Instant::now();
-        let sleep = time::Duration::from_millis(1000);
+        let sleep = time::Duration::from_millis(200);
 
         loop {
-            if let Some(conn) = self.get_tor_connection_or_close() {
-                unsafe { rust_hs_call_write_callback(conn) };
-
+            {
                 let buffers = CONN_BUFFERS.lock().unwrap_or_else(|_| {
                     panic!("problem accessing global connection buffers");
                 });
@@ -182,7 +180,13 @@ impl Connection {
                     if buffer.outbuf.len() > 0 {
                         return Ok(true);
                     }
+
+                    thread::sleep(sleep);
                 }
+            }
+
+            if let Some(conn) = self.get_tor_connection_or_close() {
+                unsafe { rust_hs_call_write_callback(conn) };
             } else {
                 return Err(io::Error::from(io::ErrorKind::BrokenPipe));
             }
@@ -190,8 +194,6 @@ impl Connection {
             if has_timeout && now.elapsed() > timeout.unwrap() {
                 return Ok(false);
             }
-
-            thread::sleep(sleep);
         }
     }
 
