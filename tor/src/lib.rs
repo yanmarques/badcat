@@ -95,7 +95,7 @@ impl Tor {
         let torrc = String::from(torrc.to_str().unwrap());
 
         let inner = thread::spawn(move || {
-            start_with_args(vec!["-f", torrc.as_str()]);
+            start_with_args(vec!["tor", "-f", torrc.as_str()]);
         });
 
         Tor { inner }
