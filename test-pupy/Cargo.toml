@@ -12,3 +12,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 tor = { path = "../tor" }
+badcat = { path = "../" }

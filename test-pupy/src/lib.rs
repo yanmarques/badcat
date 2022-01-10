@@ -4,6 +4,7 @@ use std::time::Duration;
 use std::alloc::{alloc, Layout};
 
 use tor::{Tor, stream::{Server, Connection}};
+use badcat_lib::cmem;
 
 #[no_mangle]
 pub unsafe extern "C" fn badcat_wait_conn(port: u16) -> u64 {
@@ -55,18 +56,13 @@ pub unsafe extern "C" fn badcat_read_conn(
             //      for (int index = 0; index < buf_len; index++) {
             //          *(ptr + index) = buf[index];
             //      }
-            let layout = Layout::array::<u8>(buf.len()).unwrap();
-            let ptr = alloc(layout);
-            buf.iter().enumerate().for_each(|(i, v)| {
-                std::ptr::write((ptr as usize + i) as *mut u8, *v);
-            });
-            ptr
+            let raw_ptr = cmem::c_array::<u8>(buf);
+            raw_ptr
         },
-        Err(error) => {
-            println!("YAN: read error: {:?}", error);
+        Err(_) => {
             0 as *const u8
         }
-    }    
+    }
 }
 
 #[no_mangle]
@@ -81,8 +77,7 @@ pub unsafe extern "C" fn badcat_poll_conn(conn_id: u64, timeout: u64) -> i32 {
                 0
             }
         },
-        Err(error) => {
-            println!("YAN: poll error: {:?}", error);
+        Err(_) => {
             0
         }
     }
@@ -98,8 +93,7 @@ pub unsafe extern "C" fn badcat_write_conn(conn_id: u64, buf: *const u8, buf_len
         Ok(n) => {
             n
         }
-        Err(err) => {
-            println!("YAN: rust just failed: {:?}", err);
+        Err(_) => {
             0
         }
     }
@@ -107,7 +101,7 @@ pub unsafe extern "C" fn badcat_write_conn(conn_id: u64, buf: *const u8, buf_len
 
 #[no_mangle]
 pub unsafe extern "C" fn badcat_start_tor() {
-    Tor::without_thread();
+    Tor::threadless(vec!["tor", "-f", "torrc"]);
 }
 
 // extern "C" {
