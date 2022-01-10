@@ -1,10 +1,12 @@
 use std::io::{Read, Write};
 use std::slice;
 use std::time::Duration;
-use std::alloc::{alloc, Layout};
 
-use tor::{Tor, stream::{Server, Connection}};
 use badcat_lib::cmem;
+use tor::{
+    stream::{Connection, Server},
+    Tor,
+};
 
 #[no_mangle]
 pub unsafe extern "C" fn badcat_wait_conn(port: u16) -> u64 {
@@ -21,7 +23,7 @@ pub unsafe extern "C" fn badcat_wait_conn(port: u16) -> u64 {
 pub unsafe extern "C" fn badcat_read_conn(
     conn_id: u64,
     size: usize,
-    buf_len: *mut usize
+    buf_len: *mut usize,
 ) -> *const u8 {
     let mut conn = Connection::new(conn_id, false);
 
@@ -44,11 +46,11 @@ pub unsafe extern "C" fn badcat_read_conn(
             *buf_len = buf.len();
 
             // I could not just return `buf.as_ptr`, because C memory layout
-            // would not expect such Vector pointer. 
-            // In order to return a char pointer, manually create the exact memory 
-            // layout C code expects. The code above is analogous to the following 
+            // would not expect such Vector pointer.
+            // In order to return a char pointer, manually create the exact memory
+            // layout C code expects. The code above is analogous to the following
             // C pseudo-code:
-            // 
+            //
             //      // Assume a `buf` variable of type `char[]`.
             //      // Assume a `buf_len` with the length of `buf`.
             //
@@ -58,10 +60,8 @@ pub unsafe extern "C" fn badcat_read_conn(
             //      }
             let raw_ptr = cmem::c_array::<u8>(buf);
             raw_ptr
-        },
-        Err(_) => {
-            0 as *const u8
         }
+        Err(_) => 0 as *const u8,
     }
 }
 
@@ -76,10 +76,8 @@ pub unsafe extern "C" fn badcat_poll_conn(conn_id: u64, timeout: u64) -> i32 {
             } else {
                 0
             }
-        },
-        Err(_) => {
-            0
         }
+        Err(_) => 0,
     }
 }
 
@@ -90,12 +88,8 @@ pub unsafe extern "C" fn badcat_write_conn(conn_id: u64, buf: *const u8, buf_len
     let buf = slice::from_raw_parts(buf, buf_len);
 
     match conn.write(buf) {
-        Ok(n) => {
-            n
-        }
-        Err(_) => {
-            0
-        }
+        Ok(n) => n,
+        Err(_) => 0,
     }
 }
 
