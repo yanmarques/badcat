@@ -127,4 +127,5 @@ python2 pupysh.py
 
 You should see something like this:
 
-IMAGE
+![Pupy shell screenshot](https://user-images.githubusercontent.com/28604565/148851208-0213fd43-550d-44c9-86ba-f54d3ed174c4.png)
+
