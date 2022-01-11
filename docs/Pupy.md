@@ -118,7 +118,9 @@ In order to generate the required executables, change your current working direc
 podman run --mount type=bind,src=$(pwd),target=/build/workspace/project pupy-local ./client/sources-linux/build-docker.sh
 ```
 
-It take some time to finish, but as soon as it has finished, one should see a `[+] Build complete` message. If can check the directory `pupy/pupy/payload_templates` for generated executable templates. There is an issue with the generated linux template, that the template name misses a `x64` and one must fix it. To fix it, run the following command:
+It take some time to finish, but as soon as it has finished, one should see a `[+] Build complete` message. If can check the directory `pupy/pupy/payload_templates` for generated executable templates. There is an issue - because I'm not following Pupy documentation of how to run it - with the generated linux template, that the template name misses a `x64` and one must fix it. To fix it, run the following command:
+
+**Note: one must replace the old template whenever a new build is run**
 
 ```bash
 cp ./pupy/payload_templates/pupy.lin ./pupy/payload_templates/pupyx64.lin
