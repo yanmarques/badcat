@@ -88,7 +88,7 @@ git checkout dev
 git pull
 ```
 
-Before building the integration code, think about your objectives. By default (at [this](https://github.com/yanmarques/badcat/blob/a5d245054f03b27a31096a08665b6d0a87f34d65/test-pupy/src/lib.rs#L98) line of code), badcat integration will start Tor with Tor's default `DataDirectory` and the `HiddenServiceDir` set to `hidden-service` directory. Modify the parameters to fit your desires.
+Before building the integration code, think about your objectives. By default (at [this](https://github.com/yanmarques/badcat/blob/102452990e4364f67f4ecd17b1c4f802057f62c2/test-pupy/src/lib.rs#L98) line of code), badcat integration will start Tor with Tor's default `DataDirectory` and the `HiddenServiceDir` set to `hidden-service` directory. Modify the parameters to fit your desires.
 
 Then build it:
 
