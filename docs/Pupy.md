@@ -14,7 +14,7 @@ _What works for now?_
 
 _Will it work on my machine?_
 
-**R: Probably not, unless you have docker or podman. For a bunch of reasons I will ignore here, it just works in a specific environment. Thus the POC status. So if one wants to run it, the environment must be prepared.**
+**R: Probably not, you should test it out though. I tested with a virtual machine running Fedora 34 and podman for containers. For a bunch of reasons I will ignore here, running the _backdoor_ just works in a specific environment, because of that I execute inside a container. Running Pupy, on the other hand, should work fine on any other Linux distro, but I only tested on Fedora.**
 
 _I don't care about how everything works, can't I just test it out?_
 
@@ -35,6 +35,8 @@ _I hate your integration design choices, can I help you?_
 # Quick Start
 
 You just want to test to see if it works, I get it. So each step will not contain many explainations.
+
+_Note: one may replace podman with docker, the cli syntax is exactly the same._
 
 ## 1. Clone Pupy
 
@@ -71,7 +73,7 @@ Then run the _backdoor_ with:
 LD_LIBRARY_PATH=. ./backdoor
 ```
 
-Once the server is up and running, you need to connect through Tor using Pupy. In order to discover the generated Onion Service hostname, discover the container ID then run the following command:
+Once the server is up and running, you need to connect through Tor using Pupy. In order to discover the generated Onion Service hostname, discover the container ID then run the following command (replace CONTAINER_ID with the discovered container ID):
 
 ```bash
 podman exec CONTAINER_ID cat hidden-service/hostname
