@@ -9,22 +9,28 @@ I chose pupy, among other reasons, because I failed to make it work with others 
 # Common Concerns
 
 _What works for now?_
-R: Linux only. Every RPC related stuff from Pupy works out of the box. Pupy process hidding is broken for now, so when you run the program it keeps in the foreground - this details matters when you want to be stealth, but for now just ignore it.
+
+**R: Linux only. Every RPC related stuff from Pupy works out of the box. Pupy process hidding is broken for now, so when you run the program it keeps in the foreground - this details matters when you want to be stealth, but for now just ignore it.**
 
 _Will it work on my machine?_
-R: Probably not, unless you have docker or podman. For a bunch of reasons I will ignore here, it just works in a specific environment. Thus the POC status. So if one wants to run it, the environment must be prepared.
+
+**R: Probably not, unless you have docker or podman. For a bunch of reasons I will ignore here, it just works in a specific environment. Thus the POC status. So if one wants to run it, the environment must be prepared.**
 
 _I don't care about how everything works, can't I just test it out?_
-R: Of course you can. Follow this [steps](). Although I always recommend to take a look to understand what is going on under the hood.
+
+**R: Of course you can. Follow this [steps](). Although I always recommend to take a look to understand what is going on under the hood.**
 
 _Will badcat work with any other RAT?_
-R: Probably, yes. By now it would require advanced skills and lots of time for debugging, as it was to integrate with Pupy. To measure, it took me around a month for a proof of concept.
+
+**R: Probably, yes. By now it would require advanced skills and lots of time for debugging, as it was to integrate with Pupy. To measure, it took me around a month for a proof of concept.**
 
 _Now, will badcat support any other RAT?_
-R: Probably, not. I'll try my best to fully support at least one RAT of my choice, for now Pupy. If one wants support for other RATs, one should either ask support from RAT's developers or try to write the integration code by your own. The whole community would thank you for that.
+
+**R: Probably, not. I'll try my best to fully support at least one RAT of my choice, for now Pupy. If one wants support for other RATs, one should either ask support from RAT's developers or try to write the integration code by your own. The whole community would thank you for that.**
 
 _I hate your integration design choices, can I help you?_
-R: Why haven't you told me before? Of course you can. Fill up an Issue or send a Pull Request. I'm terrible at coding and do not know how it worked, it just works.
+
+**R: Why haven't you told me before? Of course you can. Fill up an Issue or send a Pull Request. I'm terrible at coding and do not know how it worked, it just works.**
 
 # Integration
 
