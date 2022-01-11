@@ -282,3 +282,8 @@ Once the full session has started, one may see the following:
 
 ![Pupy shell connection from badcat integration](https://user-images.githubusercontent.com/28604565/148860949-71ab11ee-3d91-4342-82c6-ac96d5d75077.png)
 
+# Integration
+
+This topic tries to explain how Pupy talks to Tor Onion Service connections, supported by badcat. In case you don't know yet, see the following links:
+- [Pupy](https://github.com/n1nj4sec/pupy)
+- [Tor Onion Service](https://community.torproject.org/onion-services/)
