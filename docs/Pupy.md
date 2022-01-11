@@ -177,4 +177,5 @@ Generally it take around a minute to start a full session, it depends on your co
 
 Once the full session has started, one may see the following:
 
-IMAGE
+![Pupy shell connection from badcat integration](https://user-images.githubusercontent.com/28604565/148860949-71ab11ee-3d91-4342-82c6-ac96d5d75077.png)
+
