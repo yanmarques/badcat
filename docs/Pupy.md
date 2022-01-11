@@ -96,16 +96,17 @@ Then build it:
 cargo build --release -p test-pupy
 ```
 
-An Elf shared library will be generated `./target/release/libbadcat_pupy.so`, like the following:
+An ELF shared library will be generated at `./target/release/libbadcat_pupy.so`, check the following:
 
 ```bash
 $ file ./target/release/libbadcat_pupy.so 
 ./target/release/libbadcat_pupy.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, BuildID[sha1]=44e952dde4ea235d5683a8289ef4d39da0097e5c, with debug_info, not stripped
 ```
 
-This Elf shared library file is extremely important, it holds Tor and badcat code. Such file must be copied to two places:
-    1. The directory where Pupy will be built. As you may already know, Pupy first build the executable (elf, exe, apk, etc) with a dummy string to be replaced with actual Python code later. This such build will our next step.
-    2. Where you will run the resulting executable. As you may already know, the executable needs the shared library to run, remember this is a POC, ideally it should not need to carry the shared library to everywhere you need to run.
+This ELF shared library file is extremely important, it holds Tor and badcat code. Such file must be copied to two places:
+
+1. The directory where Pupy will be built. As you may already know, Pupy first build the executable (elf, exe, apk, etc) with a dummy string to be replaced with actual Python code later. This such build will our next step.
+2. Where you will run the resulting executable. As you may already know, the executable needs the shared library to run, remember this is a POC, ideally it should not need to carry the shared library to everywhere you need to run.
 
 Sooo, copy `libbadcat_pupy.so` shared library to `pupy/client/sources-linux`.
 
