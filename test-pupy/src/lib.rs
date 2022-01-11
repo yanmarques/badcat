@@ -95,7 +95,7 @@ pub unsafe extern "C" fn badcat_write_conn(conn_id: u64, buf: *const u8, buf_len
 
 #[no_mangle]
 pub unsafe extern "C" fn badcat_start_tor() {
-    Tor::threadless(vec!["tor", "-f", "torrc"]);
+    Tor::threadless(vec!["tor", "--SocksPort", "0", "--HiddenServiceDir", "hidden-service", "--HiddenServicePort", "8000"]);
 }
 
 // extern "C" {
