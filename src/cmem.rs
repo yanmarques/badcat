@@ -22,9 +22,11 @@ where T: Copy, {
     raw_ptr
 }
 
-pub fn copy_buf<T>(dst: &mut [T], src: &[T])
+pub fn copy_buf<T>(dst: &mut [T], src: &[T]) -> bool
 where T: Copy, {
-    assert_eq!(dst.len(), src.len());
+    if src.len() > dst.len() {
+        return false;
+    }
 
     let mut index = 0;
 
@@ -32,4 +34,6 @@ where T: Copy, {
         dst[index] = *value;
         index += 1;
     }
+
+    return true;
 }
