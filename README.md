@@ -39,7 +39,7 @@ _server_: _backdoor_ running Tor Onion Service on the _victim_.
     - [Advanced Usage](#advanced-usage)
         - [Connect through a custom shell](#1-connect-through-a-custom-shell)
         - [Connect through meterpreter](#2-connect-through-meterpreter)
-- [Miscellaneous]
+- [Miscellaneous](#miscellaneous)
     - [Tor Features](#tor-features)
     - [Pupy](#pupy)
 
