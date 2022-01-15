@@ -118,7 +118,7 @@ impl Clone for Server {
 }
 
 /// An abstraction of reading/writing data to Tor's connection
-/// Note that the whole implementation is not thread-safe.
+/// Note that the whole implementation is thread-safe.
 pub struct Connection {
     /// It's the global_identifier of Tor's connection
     id: u64,
