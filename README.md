@@ -39,6 +39,9 @@ _server_: _backdoor_ running Tor Onion Service on the _victim_.
     - [Advanced Usage](#advanced-usage)
         - [Connect through a custom shell](#1-connect-through-a-custom-shell)
         - [Connect through meterpreter](#2-connect-through-meterpreter)
+- [Miscellaneous]
+    - [Tor Features](#tor-features)
+    - [Pupy](#pupy)
 
 # Alternatives
 
@@ -283,3 +286,12 @@ With `msfconsole` opened, configure a handler for your payload and exploit it.
 Figure 5 - Meterpreter session opened through badcat
 ![Meterpreter session opened through badcat](https://user-images.githubusercontent.com/28604565/144487158-6ef721e7-2d2b-498c-a6c0-038434872182.png)
 
+# Miscellaneous
+
+## Tor Features
+
+Read the full documentation at [Tor](https://github.com/yanmarques/badcat/blob/dev/docs/Tor.md).
+
+## Pupy
+
+Badcat lacks - by purpose - all the features available in famous softwares like metasploit. Therefore I started working into integrating badcat's functionality to a full-featured Remote Administration Tool. Read the full documentation at [Pupy](https://github.com/yanmarques/badcat/blob/dev/docs/Pupy.md).

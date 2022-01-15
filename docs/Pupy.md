@@ -202,7 +202,7 @@ $ file ./target/release/libbadcat_pupy.so
 This ELF shared library file is extremely important, it holds Tor and badcat code. Such file must be copied to two places:
 
 1. The directory where Pupy will be built. As you may already know, Pupy first build the executable (elf, exe, apk, etc) with a dummy string to be replaced with actual Python code later. This such build will be our next step.
-2. Where you will run the resulting executable. As you may already know, the executable needs the shared library to run, remember this is a POC, ideally it should not need to carry the shared library to everywhere you need to run.
+2. Where you will run the resulting executable. As you may already know, the executable needs the shared library to run, remember this is a PoC, ideally it should not need to carry the shared library to everywhere you need to run.
 
 Sooo, copy the `libbadcat_pupy.so` shared library to `pupy/client/sources-linux`.
 
@@ -287,3 +287,4 @@ Once the full session has started, one may see the following:
 This topic tries to explain how Pupy talks to Tor Onion Service connections, supported by badcat. In case you don't know yet, see the following links:
 - [Pupy](https://github.com/n1nj4sec/pupy)
 - [Tor Onion Service](https://community.torproject.org/onion-services/)
+- [Tor Streaming Interface](https://github.com/yanmarques/badcat/blob/dev/docs/Tor.md#tor-streaming-interface)

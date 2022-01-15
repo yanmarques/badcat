@@ -18,7 +18,7 @@ With the ability to start Tor in the same process just calling Tor directly, thi
 
 Yeah, badcat is designed to have the server on the _victim_. Because of that, badcat needs to open a TCP server so that incoming connections through Tor reach the _backdoor_. At some point in time, badcat was implemented that way, see [here](https://github.com/yanmarques/badcat/blob/9d286e080d44c0f46c5e2359950a6672fc0ba709/victim/src/main.rs#L75), a TCP listener was started locally at any available port. I prefer not to open listeners, again it's stealthier without noisy TCP listener sockets.
 
-So I defined the problem as: how to make Tor pass incoming data to Rust code? The TCP listener is just that, a transport for communication between Tor code and Rust code.
+So I defined the problem as: _how to make Tor share data of Onion Services to Rust code?_ The TCP listener is just that, a transport for communication between Tor code and Rust code.
 
 Since Tor is already reachable from Rust code, I managed to create an interface where Tor code could call a Rust function whenever data was received from a connection, and so on. Of course, I had to patch Tor source code, see the patch [here](https://github.com/yanmarques/badcat/blob/dev/scripts/rust_hs.patch). The whole implementation of this new mechanism of communication with Tor is at the [streaming](https://github.com/yanmarques/badcat/blob/dev/tor/src/stream.rs) module.
 
