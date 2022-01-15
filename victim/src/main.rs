@@ -70,6 +70,10 @@ fn unbundle_torrc(path: &PathBuf, setting: &Setting) -> io::Result<()> {
 
     contents = contents.replace("@{DATA_DIR}", &setting.tor_dir);
 
+    if setting.uses_payload {
+        contents += &format!("\nHiddenServicePort {}\n", &setting.payload_port)
+    }
+
     fs::write(&path, &contents)
 }
 
